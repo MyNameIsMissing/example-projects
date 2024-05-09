@@ -7,14 +7,15 @@ classDef govAcctStyle stroke:#167CC5,stroke-width:4px
 classDef comAcctStyle stroke:#ea8d02,stroke-width:4px
 classDef govOrgStyle stroke:#bc0061,stroke-width:4px
 classDef comOrgStyle stroke:#010daf,stroke-width:4px
-classDef vpcStyle stroke-width:3px,stroke-dasharray: 2 1
-classDef regionStyle stroke-width:3px,stroke-dasharray: 3 1
-classDef subnetStyle stroke-width:3px,stroke-dasharray: 1 1
+classDef vpcStyle stroke:#616363,stroke-width:3px,stroke-dasharray: 3 1
+classDef regionStyle stroke:#616363,stroke-width:3px,stroke-dasharray: 10 1
+classDef subnetStyle stroke:#616363,stroke-width:3px,stroke-dasharray: 1 1
 
 %%External entities or services
-appconsumer{App Consumer<br>Customer}
-appdeveloper{App Developer<br>Customer}
-operators((Operators))
+appconsumer{App Consumer<br>Customers}
+appdeveloper{App Developer<br>Customers}
+operators((GSA Cloud.gov<br>Operators))
+zscaler[Zscaler GSA Network Routing]
 subgraph gsaauth [GSA Auth]
   gsaokta{Okta}
 end
@@ -23,25 +24,26 @@ subgraph Other Fed Auth
 end
 
 %%Accreditation boundary
-subgraph Cloud.gov
+subgraph cgAccd [Cloud.gov]
   subgraph awsComOrg [AWS Commercial Org]
 
     subgraph cnapAcct [CNAP Account]
       transit[AWS Transit Gateway]
       advfirewall[AWS Network Firewall]
-      identitycentercom[AWS Identity Center]
+      identitycentercom["AWS Identity Center<br>(auth within AWS)"]
     end
     class cnapAcct comAcctStyle
 
     subgraph cusAccAcct [Customer Access Account]
       route53[Route53 DNS]
-      cloudfront[Cloudfront CDN]
+      cloudfront[Cloudfront CDNs]
+      wafShield[AWS WAF and Shield Advanced]
     end
     class cusAccAcct comAcctStyle
 
     subgraph govLogCollAcct [Log Collector Account]
       kinesisfirehose[Kinesis Firehose]
-      logollectioncom[Commercial Log Collection]
+      logollectioncom[OpenSearch Log Collection]
     end
     class govLogCollAcct comAcctStyle
 
@@ -52,41 +54,40 @@ subgraph Cloud.gov
       subgraph priPlatAcct [Primary Platform Account]
         subgraph usGovWestRegion[US Gov West Region]
 
-          subgraph vpcProd [VPC Prod]
-            privalb[Privileged ALB]
-            appalbs[App ALB]
+          subgraph vpcProd1 [VPC Prod]
 
-              subgraph cfOpsSubnet [CloudFoundry Ops Subnet]
-              uaa[UAA]
-              jumpbox[Jumpbox]
-              concourse[Concourse CI/CD]
-              sshproxy[App Dev SSH Proxy]
-              BOSH[BOSH Director]
-              boshDB[BOSH Director DB in RDS]
-              s3CritData[Critical Data in S3]
+              subgraph pubSubnet1 [Public Subnet]
+                appalbs[ALBs for App access]
               end
-              class cfOpsSubnet subnetStyle
+              class pubSubnet1 subnetStyle
 
               subgraph cfAppSubnet [CloudFroudry App Subnet]
-              gorouter[Gorouter]
-              diego[Container Management<br>aka diego ]
+              gorouter[CloudFoundry Gorouters]
+                subgraph diego[Container Management]
+                  diegoCell(Web App UI)
+                  customerApp1{Customer App<br>Containers}
+                end
               end
               class cfAppSubnet subnetStyle
 
           end
-          class vpcProd vpcStyle
+          class vpcProd1 vpcStyle
 
         end
       class usGovWestRegion regionStyle
 
+
+    end
+    class priPlatAcct govAcctStyle
+
+    subgraph drDataAcct [DR Data Account]
         subgraph usGovEastRegion[US Gov East Region]
           replicatedRDS[RDS DB Copy]
           replicatedS3[S3 Data copy]
         end
         class usGovEastRegion regionStyle
-        
     end
-    class priPlatAcct govAcctStyle
+    class drDataAcct govAcctStyle
 
     subgraph govStageAcct [Staging Account]
         preprod[Near Mirror of Primary Prod account]
@@ -99,12 +100,25 @@ subgraph Cloud.gov
     class govDevAcct govAcctStyle
 
     subgraph govToolAcct [Tooling Account<br>aka Hub]
-        tooling[Tooling resources only<br>Not monitoring or logging]
+      subgraph toolVPC [Tooling VPC]
+              subgraph cfOpsSubnet [CloudFoundry Ops Subnet]
+              privalb[ALB for Privileged Users]
+              uaa["UAAs<br>(auth within CloudFoundry)"]
+              jumpbox[Jumpbox]
+              concourse[Concourse CI/CD]
+              sshproxy[App Dev SSH Proxy]
+              BOSH[BOSH Director]
+              boshDB[BOSH Director DB in RDS]
+              s3CritData[Critical Data in S3]
+              end
+              class cfOpsSubnet subnetStyle
+      end
+      class toolVPC vpcStyle
     end
     class govToolAcct govAcctStyle
 
     subgraph govMonAcct [Monitoring and Logging Account]
-      logollectiongov[Centralized Log Collection]
+      logollectiongov[OpenSearch Log Collection]
       vulndetect[Vulnerability Detection Tools]
       logviz[Log Visualization and Query]
     end
@@ -116,21 +130,22 @@ subgraph Cloud.gov
 end
 
 %%Connections
+wafShield <-.Multiple ACLs.-> cloudfront
 cloudfront -- Web HTTPS 443 --> appalbs
 appconsumer -- Web HTTPS 443 --> cloudfront
 jumpbox -.auth.-> uaa
 concourse -.auth.-> uaa
 privalb -- Ops CLI --> jumpbox
-privalb -- Web HTTPS 443 --> concourse
+privalb -- Ops Web HTTPS 443 --> concourse
 privalb -- App Dev CLI --> sshproxy
 sshproxy-.auth.-> uaa
-sshproxy -- CLI --> diego
-operators -- Web or CLI HTTPS 443 --> advfirewall
+sshproxy -- CLI --> customerApp1
+operators -- Web or CLI HTTPS 443 --> zscaler --> advfirewall
 advfirewall -- Web or CLI HTTPS 443 --> transit
 transit -- Web or CLI HTTPS 443 --> privalb
 appdeveloper -- Web or CLI HTTPS 443 --> advfirewall
 appalbs -- Web HTTPS 443 --> gorouter
-gorouter -- Web HTTPS 443 --> diego
+gorouter -- Web HTTPS 443 --> diegoCell
 kinesisfirehose -.Encrypted Log Transfer.-> logollectiongov
 uaa -.auth.-> gsaokta
 logollectioncom -.Log Transfer.->kinesisfirehose
@@ -148,7 +163,7 @@ s3CritData -.S3 Cross Region Replication.-> replicatedS3
   subgraph Legend
     direction TB
     legend_CommOrg[AWS Commercial Organization]:::comOrgStyle
-    legend_GovOrg[AWS govCloud Organization]:::govOrgStyle
+    legend_GovOrg[AWS GovCloud Organization]:::govOrgStyle
     legend_CommAcct[AWS Commercial Account]:::comAcctStyle
     legend_GovAcct[AWS GovCloud Account]:::govAcctStyle
     legend_region[AWS Region]:::regionStyle
