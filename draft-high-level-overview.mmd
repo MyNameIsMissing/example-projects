@@ -7,9 +7,9 @@ classDef govAcctStyle stroke:#167CC5,stroke-width:4px
 classDef comAcctStyle stroke:#ea8d02,stroke-width:4px
 classDef govOrgStyle stroke:#bc0061,stroke-width:4px
 classDef comOrgStyle stroke:#010daf,stroke-width:4px
-classDef vpcStyle stroke-width:3px,stroke-dasharray: 3 1
-classDef regionStyle stroke-width:3px,stroke-dasharray: 10 1
-classDef subnetStyle stroke-width:3px,stroke-dasharray: 1 1
+classDef vpcStyle stroke:#616363,stroke-width:3px,stroke-dasharray: 3 1
+classDef regionStyle stroke:#616363,stroke-width:3px,stroke-dasharray: 10 1
+classDef subnetStyle stroke:#616363,stroke-width:3px,stroke-dasharray: 1 1
 
 %%External entities or services
 appconsumer{App Consumer<br>Customers}
@@ -76,14 +76,18 @@ subgraph cgAccd [Cloud.gov]
         end
       class usGovWestRegion regionStyle
 
+
+    end
+    class priPlatAcct govAcctStyle
+
+    subgraph drDataAcct [DR Data Account]
         subgraph usGovEastRegion[US Gov East Region]
           replicatedRDS[RDS DB Copy]
           replicatedS3[S3 Data copy]
         end
         class usGovEastRegion regionStyle
-
     end
-    class priPlatAcct govAcctStyle
+    class drDataAcct govAcctStyle
 
     subgraph govStageAcct [Staging Account]
         preprod[Near Mirror of Primary Prod account]
