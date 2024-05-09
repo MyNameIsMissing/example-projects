@@ -1,3 +1,5 @@
+%%title: High Level Overview
+
 flowchart TD
 
 %%style
@@ -5,6 +7,9 @@ classDef govAcctStyle stroke:#167CC5,stroke-width:4px
 classDef comAcctStyle stroke:#ea8d02,stroke-width:4px
 classDef govOrgStyle stroke:#bc0061,stroke-width:4px
 classDef comOrgStyle stroke:#010daf,stroke-width:4px
+classDef vpcStyle stroke-width:3px,stroke-dasharray: 2 1
+classDef regionStyle stroke-width:3px,stroke-dasharray: 3 1
+classDef subnetStyle stroke-width:3px,stroke-dasharray: 1 1
 
 %%External entities or services
 appconsumer{App Consumer<br>Customer}
@@ -16,53 +21,98 @@ end
 subgraph Other Fed Auth
   extauth{External Auth}
 end
+
 %%Accreditation boundary
 subgraph Cloud.gov
   subgraph awsComOrg [AWS Commercial Org]
+
     subgraph cnapAcct [CNAP Account]
       transit[AWS Transit Gateway]
       advfirewall[AWS Network Firewall]
       identitycentercom[AWS Identity Center]
     end
     class cnapAcct comAcctStyle
+
     subgraph cusAccAcct [Customer Access Account]
       route53[Route53 DNS]
       cloudfront[Cloudfront CDN]
     end
     class cusAccAcct comAcctStyle
+
     subgraph govLogCollAcct [Log Collector Account]
       kinesisfirehose[Kinesis Firehose]
       logollectioncom[Commercial Log Collection]
     end
     class govLogCollAcct comAcctStyle
+
   end
   class awsComOrg comOrgStyle
+
   subgraph awsGovOrg [AWS GovCloud Org]
       subgraph priPlatAcct [Primary Platform Account]
-        subgraph VPC Prod
-          privalb[Privileged ALB]
-          appalbs[App ALB]
-          subgraph CloudFoundry Ops Subnet
-          uaa[UAA]
-          jumpbox[Jumpbox]
-          concourse[Concourse CI/CD]
-          sshproxy[App Dev SSH Proxy]
+        subgraph usGovWestRegion[US Gov West Region]
+
+          subgraph vpcProd [VPC Prod]
+            privalb[Privileged ALB]
+            appalbs[App ALB]
+
+              subgraph cfOpsSubnet [CloudFoundry Ops Subnet]
+              uaa[UAA]
+              jumpbox[Jumpbox]
+              concourse[Concourse CI/CD]
+              sshproxy[App Dev SSH Proxy]
+              BOSH[BOSH Director]
+              boshDB[BOSH Director DB in RDS]
+              s3CritData[Critical Data in S3]
+              end
+              class cfOpsSubnet subnetStyle
+
+              subgraph cfAppSubnet [CloudFroudry App Subnet]
+              gorouter[Gorouter]
+              diego[Container Management<br>aka diego ]
+              end
+              class cfAppSubnet subnetStyle
+
           end
-          subgraph CloudFroudry App Subnet
-          gorouter[Gorouter]
-          diego[Container Management<br>aka diego ]
-          end
+          class vpcProd vpcStyle
+
         end
-      end
-      class priPlatAcct govAcctStyle
-      subgraph govMonAcct [Monitoring and Logging Account]
-        logollectiongov[Centralized Log Collection]
-        vulndetect[Vulnerability Detection Tools]
-        logviz[Log Visualization and Query]
-      end
-      class govMonAcct govAcctStyle
+      class usGovWestRegion regionStyle
+
+        subgraph usGovEastRegion[US Gov East Region]
+          replicatedRDS[RDS DB Copy]
+          replicatedS3[S3 Data copy]
+        end
+        class usGovEastRegion regionStyle
+        
+    end
+    class priPlatAcct govAcctStyle
+
+    subgraph govStageAcct [Staging Account]
+        preprod[Near Mirror of Primary Prod account]
+    end
+    class govStageAcct govAcctStyle
+
+    subgraph govDevAcct [Development Account]
+        dev[Sufficient resources for Platform Development]
+    end
+    class govDevAcct govAcctStyle
+
+    subgraph govToolAcct [Tooling Account<br>aka Hub]
+        tooling[Tooling resources only<br>Not monitoring or logging]
+    end
+    class govToolAcct govAcctStyle
+
+    subgraph govMonAcct [Monitoring and Logging Account]
+      logollectiongov[Centralized Log Collection]
+      vulndetect[Vulnerability Detection Tools]
+      logviz[Log Visualization and Query]
+    end
+    class govMonAcct govAcctStyle
+
   end
   class awsGovOrg govOrgStyle
+
 end
 
 %%Connections
@@ -87,3 +137,21 @@ logollectioncom -.Log Transfer.->kinesisfirehose
 operators -.auth.-> identitycentercom
 identitycentercom -.auth.-> gsaokta
 uaa -.auth.-> extauth
+BOSH --> boshDB
+boshDB -.RDS Replication.-> replicatedRDS
+s3CritData -.S3 Cross Region Replication.-> replicatedS3
+%%Connections below commented until later, maybe needs dedicated diagram
+%%Messes up the entire digram if shown currently
+%%govToolAcct .-> govDevAcct & govStageAcct & priPlatAcct
+
+%%Legend
+  subgraph Legend
+    direction TB
+    legend_CommOrg[AWS Commercial Organization]:::comOrgStyle
+    legend_GovOrg[AWS govCloud Organization]:::govOrgStyle
+    legend_CommAcct[AWS Commercial Account]:::comAcctStyle
+    legend_GovAcct[AWS GovCloud Account]:::govAcctStyle
+    legend_region[AWS Region]:::regionStyle
+    legend_vpc[AWS VPC]:::vpcStyle
+    legend_subnet[AWS Subnet]:::subnetStyle
+  end

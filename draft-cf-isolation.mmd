@@ -1,0 +1,32 @@
+
+%%title: CloudFoundy App Isolation
+
+flowchart TD
+
+%%style
+
+%%External entities or services
+
+gsaoperators((Operators))
+
+%%Accreditation boundary
+
+subgraph Cloud.gov
+
+%%not diagrammed yet: AWS Commercial and App Customers path
+
+  UAA[UAA]
+  subgraph Diego[Diego Container Management]
+    cell[cell]
+    subgraph isolation segment 1
+    app1[app1 containers]
+    end
+    subgraph isolation segment 2
+    app2[app2 containers]
+    end
+  end
+end
+
+%%Connections
+
+gsaoperators -.auth.-> UAA
