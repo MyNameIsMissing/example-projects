@@ -1,0 +1,89 @@
+flowchart TD
+
+%%style
+classDef govAcctStyle stroke:#167CC5,stroke-width:4px
+classDef comAcctStyle stroke:#ea8d02,stroke-width:4px
+classDef govOrgStyle stroke:#bc0061,stroke-width:4px
+classDef comOrgStyle stroke:#010daf,stroke-width:4px
+
+%%External entities or services
+appconsumer{App Consumer<br>Customer}
+appdeveloper{App Developer<br>Customer}
+operators((Operators))
+subgraph gsaauth [GSA Auth]
+  gsaokta{Okta}
+end
+subgraph Other Fed Auth
+  extauth{External Auth}
+end
+%%Accreditation boundary
+subgraph Cloud.gov
+  subgraph awsComOrg [AWS Commercial Org]
+    subgraph cnapAcct [CNAP Account]
+      transit[AWS Transit Gateway]
+      advfirewall[AWS Network Firewall]
+      identitycentercom[AWS Identity Center]
+    end
+    class cnapAcct comAcctStyle
+    subgraph cusAccAcct [Customer Access Account]
+      route53[Route53 DNS]
+      cloudfront[Cloudfront CDN]
+    end
+    class cusAccAcct comAcctStyle
+    subgraph govLogCollAcct [Log Collector Account]
+      kinesisfirehose[Kinesis Firehose]
+      logollectioncom[Commercial Log Collection]
+    end
+    class govLogCollAcct comAcctStyle
+  end
+  class awsComOrg comOrgStyle
+  subgraph awsGovOrg [AWS GovCloud Org]
+      subgraph priPlatAcct [Primary Platform Account]
+        subgraph VPC Prod
+          privalb[Privileged ALB]
+          appalbs[App ALB]
+          subgraph CloudFoundry Ops Subnet
+          uaa[UAA]
+          jumpbox[Jumpbox]
+          concourse[Concourse CI/CD]
+          sshproxy[App Dev SSH Proxy]
+          end
+          subgraph CloudFroudry App Subnet
+          gorouter[Gorouter]
+          diego[Container Management<br>aka diego ]
+          end
+        end
+      end
+      class priPlatAcct govAcctStyle
+      subgraph govMonAcct [Monitoring and Logging Account]
+        logollectiongov[Centralized Log Collection]
+        vulndetect[Vulnerability Detection Tools]
+        logviz[Log Visualization and Query]
+      end
+      class govMonAcct govAcctStyle
+  end
+  class awsGovOrg govOrgStyle
+end
+
+%%Connections
+cloudfront -- Web HTTPS 443 --> appalbs
+appconsumer -- Web HTTPS 443 --> cloudfront
+jumpbox -.auth.-> uaa
+concourse -.auth.-> uaa
+privalb -- Ops CLI --> jumpbox
+privalb -- Web HTTPS 443 --> concourse
+privalb -- App Dev CLI --> sshproxy
+sshproxy-.auth.-> uaa
+sshproxy -- CLI --> diego
+operators -- Web or CLI HTTPS 443 --> advfirewall
+advfirewall -- Web or CLI HTTPS 443 --> transit
+transit -- Web or CLI HTTPS 443 --> privalb
+appdeveloper -- Web or CLI HTTPS 443 --> advfirewall
+appalbs -- Web HTTPS 443 --> gorouter
+gorouter -- Web HTTPS 443 --> diego
+kinesisfirehose -.Encrypted Log Transfer.-> logollectiongov
+uaa -.auth.-> gsaokta
+logollectioncom -.Log Transfer.->kinesisfirehose
+operators -.auth.-> identitycentercom
+identitycentercom -.auth.-> gsaokta
+uaa -.auth.-> extauth
