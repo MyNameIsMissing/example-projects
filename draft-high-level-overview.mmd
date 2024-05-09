@@ -36,7 +36,8 @@ subgraph cgAccd [Cloud.gov]
 
     subgraph cusAccAcct [Customer Access Account]
       route53[Route53 DNS]
-      cloudfront[Cloudfront CDN]
+      cloudfront[Cloudfront CDNs]
+      wafShield[AWS WAF and Shield Advanced]
     end
     class cusAccAcct comAcctStyle
 
@@ -125,6 +126,7 @@ subgraph cgAccd [Cloud.gov]
 end
 
 %%Connections
+wafShield <-.Multiple ACLs.-> cloudfront
 cloudfront -- Web HTTPS 443 --> appalbs
 appconsumer -- Web HTTPS 443 --> cloudfront
 jumpbox -.auth.-> uaa
@@ -157,7 +159,7 @@ s3CritData -.S3 Cross Region Replication.-> replicatedS3
   subgraph Legend
     direction TB
     legend_CommOrg[AWS Commercial Organization]:::comOrgStyle
-    legend_GovOrg[AWS govCloud Organization]:::govOrgStyle
+    legend_GovOrg[AWS GovCloud Organization]:::govOrgStyle
     legend_CommAcct[AWS Commercial Account]:::comAcctStyle
     legend_GovAcct[AWS GovCloud Account]:::govAcctStyle
     legend_region[AWS Region]:::regionStyle
