@@ -66,6 +66,7 @@ subgraph cgAccd [Cloud.gov]
 
               subgraph cfAppSubnet [CloudFroudry App Subnet]
               gorouter[CloudFoundry Gorouters]
+              prodUaa[Production UAA]
                 subgraph diego[Container Management]
                   diegoCell(Web App UI)
                   customerApp1{Customer App<br>Containers}
@@ -141,7 +142,8 @@ privalb -- Ops CLI --> jumpbox
 privalb -- Ops Web HTTPS 443 --> concourse
 transit -- Dev CLI SSH --> devalbs
 devalbs -- Dev CLI SSH --> sshproxy
-sshproxy-.auth.-> uaa
+sshproxy-.auth.-> prodUaa
+prodUaa -.auth.- extauth & gsaokta
 sshproxy -- CLI SSH --> gorouter
 operators -- Web or CLI HTTPS 443 --> zscaler --> advfirewall
 advfirewall -- Web or CLI HTTPS 443 --> transit
@@ -155,7 +157,6 @@ uaa -.auth.-> gsaokta
 logollectioncom -.Log Transfer.->kinesisfirehose
 operators -.auth.-> identitycentercom
 identitycentercom -.auth.-> gsaokta
-uaa -.auth.-> extauth
 BOSH --> boshDB
 boshDB -.RDS Replication.-> replicatedRDS
 s3CritData -.S3 Cross Region Replication.-> replicatedS3
