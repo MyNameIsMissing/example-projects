@@ -38,6 +38,7 @@ subgraph cgAccd [Cloud.gov]
       route53[Route53 DNS]
       cloudfront[Cloudfront CDNs]
       wafShield[AWS WAF and Shield Advanced]
+      webNetFirewall[AWS Network Firewall]
     end
     class cusAccAcct comAcctStyle
 
@@ -57,12 +58,15 @@ subgraph cgAccd [Cloud.gov]
           subgraph vpcProd1 [VPC Prod]
 
               subgraph pubSubnet1 [Public Subnet]
-                appalbs[ALBs for App access]
+                appalbs[ALBs for App Access]
+                devalbs[ALBs for Dev Access]
+                sshproxy[App Dev SSH Proxy]
               end
               class pubSubnet1 subnetStyle
 
               subgraph cfAppSubnet [CloudFroudry App Subnet]
               gorouter[CloudFoundry Gorouters]
+              prodUaa[Production UAA]
                 subgraph diego[Container Management]
                   diegoCell(Web App UI)
                   customerApp1{Customer App<br>Containers}
@@ -106,7 +110,6 @@ subgraph cgAccd [Cloud.gov]
               uaa["UAAs<br>(auth within CloudFoundry)"]
               jumpbox[Jumpbox]
               concourse[Concourse CI/CD]
-              sshproxy[App Dev SSH Proxy]
               BOSH[BOSH Director]
               boshDB[BOSH Director DB in RDS]
               s3CritData[Critical Data in S3]
@@ -137,21 +140,23 @@ jumpbox -.auth.-> uaa
 concourse -.auth.-> uaa
 privalb -- Ops CLI --> jumpbox
 privalb -- Ops Web HTTPS 443 --> concourse
-privalb -- App Dev CLI --> sshproxy
-sshproxy-.auth.-> uaa
-sshproxy -- CLI --> customerApp1
+transit -- Dev CLI SSH --> devalbs
+devalbs -- Dev CLI SSH --> sshproxy
+sshproxy-.auth.-> prodUaa
+prodUaa -.auth.- extauth & gsaokta
+sshproxy -- CLI SSH --> gorouter
 operators -- Web or CLI HTTPS 443 --> zscaler --> advfirewall
 advfirewall -- Web or CLI HTTPS 443 --> transit
 transit -- Web or CLI HTTPS 443 --> privalb
 appdeveloper -- Web or CLI HTTPS 443 --> advfirewall
 appalbs -- Web HTTPS 443 --> gorouter
 gorouter -- Web HTTPS 443 --> diegoCell
+gorouter -- CLI SSH 22 --> customerApp1
 kinesisfirehose -.Encrypted Log Transfer.-> logollectiongov
 uaa -.auth.-> gsaokta
 logollectioncom -.Log Transfer.->kinesisfirehose
 operators -.auth.-> identitycentercom
 identitycentercom -.auth.-> gsaokta
-uaa -.auth.-> extauth
 BOSH --> boshDB
 boshDB -.RDS Replication.-> replicatedRDS
 s3CritData -.S3 Cross Region Replication.-> replicatedS3
@@ -175,3 +180,4 @@ s3CritData -.S3 Cross Region Replication.-> replicatedS3
   subgraph Architecture Draft 1 Diagram Goals
     textbox[Facilitate discussion<br>SCCA/CNAP inclusion<br>Multi-account<br>Separation of Prod and Non-Prod<br>Centralized Logging]
   end
+  
