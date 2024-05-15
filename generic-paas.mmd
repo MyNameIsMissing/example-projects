@@ -1,0 +1,61 @@
+%%Generic PaaS diagram
+
+flowchart TD
+
+%%External entities or services
+customer{Web App Customers}
+admin{System Administrators}
+
+%%Accreditation boundary
+subgraph Cloud PaaS
+  subgraph AWS Commercial Org
+    subgraph Web Access Account
+      route53[route53]
+      cloudfront[cloudfront]
+    end
+    subgraph Commercial Transit Account
+      awsnetfirewall[AWS Advanced Network Firewall]
+      awsXit[AWS Transit Gateway]
+    end
+  end
+  subgraph AWS GovCloud Org
+      subgraph prod1[Prod Account 1]
+        subgraph VPC Prod
+          ALB[ALB]
+          subgraph Container Management
+          auth[auth]
+          appContainer{Web Front End}
+          end
+        end
+      end
+      subgraph security[Monitoring and Security Account]
+        vulnScanner[Vulnerability Scanners]
+        awsXitVuln[AWS Transit Gateway]
+        logging[Centralized Logging]
+      end
+      subgraph transitG[GovCloud Transit Account]
+        awsXitG[AWS Transit Gateway]
+        awsnetfirewallG[AWS Advanced Network Firewall]
+      end
+      subgraph orchestration[Orchestration Account]
+        orchestrator[Platform Orchestrator Tools]
+      end
+      subgraph dev[Dev Account]
+        devResources[Dev Resources]
+      end
+      subgraph stage[Staging Account]
+        stageResources[Staging Resources]
+      end
+  end
+end
+
+%%Connections
+cloudfront -- Web HTTPS 443 --> ALB
+customer -- Web HTTPS 443 --> cloudfront
+ALB -- Web HTTPS 443 --> appContainer
+admin -- Web or CLI --> awsnetfirewall
+awsnetfirewall -- Web or CLI --> awsXit
+awsXit -- Web or CLI --> awsXitG
+awsXitG --> orchestration
+orchestration <--control--> dev & stage & prod1
+security <-.audits.-> dev & stage & prod1 & transitG
