@@ -1,0 +1,51 @@
+%%CF fronted by Perimeter
+
+flowchart TD
+
+%%External entities or services
+customer{Web App Customers}
+admin{System Administrators}
+
+%%Accreditation boundary
+subgraph Cloud PaaS
+  subgraph AWS Commercial Org
+    subgraph Commercial Web Access Account
+      cloudfront[cloudfront]
+      awsnetfirewallWeb[AWS Advanced Network Firewall<br>AWS WAF<br>AWS Shield Advance]
+    end
+    subgraph Commercial Perimeter Account
+      awsEndpointCom[AWS UI or CLI enpoint]
+      awsnetfirewallPer[AWS Advanced Network Firewall<br>AWS WAF<br>AWS Shield Advance]
+      awsXit[AWS Transit Gateway]
+      proxySubnet[Proxy Subnet]
+    end
+  end
+
+  subgraph AWS GovCloud Org
+      subgraph GovCloud Perimeter Account
+      awsEndpointGov[AWS UI or CLI enpoint]
+      awsnetfirewallGov[AWS Advanced Network Firewall<br>AWS WAF<br>AWS Shield Advance]
+      awsXitGov[AWS Transit Gateway]
+      end
+      subgraph prod1[Prod Workload Account 1]
+        subgraph VPC Prod Workload
+          wALB1[ALB]
+          workload1[workload]
+        end
+      end
+
+  end
+
+end
+
+%%Connections
+customer -- Web HTTPS 443 --> proxySubnet
+proxySubnet -- Web HTTPS 443 --> cloudfront
+cloudfront -- Web HTTPS 443 --> wALB1
+wALB1 -- Web HTTPS 443 --> workload1
+admin -- Web or CLI --> awsEndpointCom
+admin -- Web or CLI --> awsEndpointGov
+
+
+
+
