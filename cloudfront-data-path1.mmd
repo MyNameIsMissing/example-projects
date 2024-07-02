@@ -25,6 +25,7 @@ subgraph Cloud PaaS
       awsEndpointGov[AWS UI or CLI enpoint]
       awsnetfirewallGov[AWS Advanced Network Firewall<br>AWS WAF<br>AWS Shield Advance]
       awsXitGov[AWS Transit Gateway]
+      albForwarderGov[ALB Forwarder]
       end
       subgraph prod1[Prod Workload Account 1]
         subgraph VPC Prod Workload
@@ -39,7 +40,8 @@ end
 
 %%Connections
 customer -- Web HTTPS 443 --> cloudfront
-cloudfront -- Web HTTPS 443 --> wALB1
+cloudfront -- Web HTTPS 443 --> albForwarderGov
+albForwarderGov  -- Web HTTPS 443 --> wALB1
 wALB1 -- Web HTTPS 443 --> workload1
 admin -- Web or CLI --> awsEndpointCom
 admin -- Web or CLI --> awsEndpointGov
