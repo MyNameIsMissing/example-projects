@@ -5,27 +5,44 @@
     <title>My Weather App</title>
     <style>
       body {
-        font-family: Arial, sans-serif;
-        margin: 20px;
-        background: #f0f4f8;
-        color: #333;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+        margin: 0;
+        min-height: 100vh;
+        background: linear-gradient(135deg, #6e8efb, #a777e3);
+        color: #2d3748;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
+
       .container {
         max-width: 600px;
-        margin: 40px auto;
-        background: #fff;
-        padding: 20px;
-        border-radius: 8px;
+        margin: 20px;
+        background: rgba(255, 255, 255, 0.95);
+        padding: 30px;
+        border-radius: 16px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        backdrop-filter: blur(10px);
+        transition: transform 0.2s ease;
       }
+
+      .container:hover {
+        transform: translateY(-5px);
+      }
+
       h1 {
         text-align: center;
+        color: #2d3748;
+        font-size: 2.5rem;
+        margin-bottom: 1.5rem;
+        font-weight: 600;
       }
+
       .form-group {
-        display: flex;
-        gap: 10px;
-        justify-content: center;
-        margin-bottom: 20px;
+        margin-bottom: 1.5rem;
+        transition: all 0.3s ease;
       }
+
       input {
         width: 200px;
         padding: 8px;
