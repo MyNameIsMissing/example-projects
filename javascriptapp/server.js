@@ -40,9 +40,14 @@ app.get('/api/weather', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+// If this file is run directly, start the server.  
+/* istanbul ignore next */
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
 
 // Export app for testing
 module.exports = app;
