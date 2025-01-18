@@ -23,14 +23,14 @@ A simple weather application that displays current weather conditions for any ci
 3. Create a `.env` file in the project root with your OpenWeather API key:  
 `OPENWEATHER_API_KEY=<yourKey>`
 
+## Testing
+Run the test suite with coverage report:  
+`npm test`
+
 ## Running Locally
 Start the development server:  
 `npm start`  
 The app will be available at http://localhost:3000
-
-## Testing
-Run the test suite with coverage report:
-`npm test`
 
 ## Project Structure
 - server.js - Express backend server
