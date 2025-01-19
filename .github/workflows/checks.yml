@@ -27,4 +27,6 @@ jobs:
 
       - name: Run tests with coverage
         working-directory: javascriptapp
+        env:
+          OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
         run: npm test
