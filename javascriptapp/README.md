@@ -24,21 +24,25 @@ A simple weather application that displays current weather conditions for any ci
 `OPENWEATHER_API_KEY=<yourKey>`
 
 ## Testing
+
 Run the test suite with coverage report:  
 `npm test`
 
 ## Running Locally
+
 Start the development server:  
 `npm start`  
 The app will be available at http://localhost:3000
 
 ## Project Structure
+
 - server.js - Express backend server
 - public/ - Static frontend files
-    - index.html - Main web interface
+  - index.html - Main web interface
 - tests/ - Jest test files
 
 ## Technologies Used
+
 Express.js - Backend server  
 Jest - Testing framework  
 SuperTest - HTTP testing library  
