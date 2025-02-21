@@ -1,3 +1,7 @@
+Note to the reader.  This example project was 95% constructed by AI as a test to determine viablity on small projects.  Code, testing, GA workflow, even the rest of this readme.
+
+---
+
 # Weather App Example
 
 A simple weather application that displays current weather conditions for any city using the OpenWeather API.
