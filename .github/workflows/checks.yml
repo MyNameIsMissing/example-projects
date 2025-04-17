@@ -46,5 +46,6 @@ jobs:
         run: |
           for file in $(find mermaid_diagrams -name '*.mmd'); do
             echo "Validating $file"
-            mmdc --input "$file" --output /dev/null || exit 1
+            mmdc --input "$file" --output "${file}.svg" || exit 1
+            rm -f "${file}.svg" # Clean up the temporary output file
           done
