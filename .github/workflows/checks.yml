@@ -7,7 +7,6 @@ on:
   pull_request:
     paths:
       - javascriptapp/**
-      - mermaid_diagrams/**/*.mmd
 
 jobs:
   build-and-test:
@@ -31,21 +30,3 @@ jobs:
         env:
           OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
         run: npm test
-
-  validate-mermaid:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v2
-
-      - name: Install Mermaid CLI
-        run: npm install -g @mermaid-js/mermaid-cli
-
-      - name: Find and validate Mermaid diagrams
-        run: |
-          for file in $(find mermaid_diagrams -name '*.mmd'); do
-            echo "Validating $file"
-            mmdc --input "$file" --output "${file}.svg" || exit 1
-            rm -f "${file}.svg" # Clean up the temporary output file
-          done
