@@ -16,6 +16,19 @@ This folder contains examples of using [Mermaid](https://mermaid.js.org/) to cre
    - An example of creating a menu using Mermaid's `click` directive to link to other diagrams or resources.
    - **Note**: The `click` directive does not work in GitHub's Mermaid preview. To view this menu with full functionality, use the [Mermaid Live Editor](https://mermaid-js.github.io/mermaid-live-editor/) or host it in an environment that supports interactive Mermaid features.
 
+## Rendered Diagram Previews
+
+### Generic PaaS Architecture (ELK Layout)
+To illustrate the ELK layout used in the `generic-paas.mmd` diagram, a PNG version of the diagram has been generated. This is provided because GitHub's Mermaid preview does not currently support the ELK layout.
+
+![Generic PaaS Architecture](generic-paas.png)
+
+- **File**: [`generic-paas.mmd`](generic-paas.mmd)
+- **Rendered Version**: [`generic-paas.png`](generic-paas.png)
+
+You can view the PNG version above or open the `.mmd` file in the [Mermaid Live Editor](https://mermaid-js.github.io/mermaid-live-editor/) to explore the diagram interactively.
+
+
 ## How to Use
 1. Clone this repository:
 ```
