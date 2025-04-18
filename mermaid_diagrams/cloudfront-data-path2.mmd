@@ -1,6 +1,13 @@
-%%CF fronted by Perimeter
+---
+title: CloudFront Data Path 2
+theme: base
+config:
+  layout: elk
+  elk:
+    mergeEdges: true
+---
 
-flowchart TD
+flowchart TB
 
 %%External entities or services
 customer{Web App Customers}
@@ -10,43 +17,37 @@ admin{System Administrators}
 subgraph Cloud PaaS
   subgraph AWS Commercial Org
     subgraph Commercial Web Access Account
-      cloudfront[cloudfront]
-      awsnetfirewallWeb[AWS Advanced Network Firewall<br>AWS WAF<br>AWS Shield Advance]
+      cloudfront[CloudFront]
+      awsnetfirewallWeb[AWS Network Firewall<br>AWS WAF<br>AWS Shield Advanced]
     end
     subgraph Commercial Perimeter Account
-      awsEndpointCom[AWS UI or CLI enpoint]
-      awsnetfirewallPer[AWS Advanced Network Firewall<br>AWS WAF<br>AWS Shield Advance]
+      awsEndpointCom[AWS UI or CLI Endpoint]
+      awsnetfirewallPer[AWS Network Firewall<br>AWS WAF<br>AWS Shield Advanced]
       awsXit[AWS Transit Gateway]
       proxySubnet[Proxy Subnet]
     end
   end
 
   subgraph AWS GovCloud Org
-      subgraph GovCloud Perimeter Account
-      awsEndpointGov[AWS UI or CLI enpoint]
-      awsnetfirewallGov[AWS Advanced Network Firewall<br>AWS WAF<br>AWS Shield Advance]
+    subgraph GovCloud Perimeter Account
+      awsEndpointGov[AWS UI or CLI Endpoint]
+      awsnetfirewallGov[AWS Network Firewall<br>AWS WAF<br>AWS Shield Advanced]
       awsXitGov[AWS Transit Gateway]
       albForwarderGov[ALB Forwarder]
+    end
+    subgraph Prod Accounts
+      subgraph VPC Prod Workload
+        wALB1[Application Load Balancer]
+        workload1{Workload}
       end
-      subgraph prod1[Prod Workload Account 1]
-        subgraph VPC Prod Workload
-          wALB1[ALB]
-          workload1[workload]
-        end
-      end
-
+    end
   end
-
 end
 
 %%Connections
-customer -- Web HTTPS 443 --> proxySubnet
-proxySubnet -- Web HTTPS 443 --> cloudfront
-cloudfront -- Web HTTPS 443 --> albForwarderGov
-albForwarderGov  -- Web HTTPS 443 --> wALB1
-wALB1 -- Web HTTPS 443 --> workload1
-admin -- Web or CLI --> awsEndpointCom
-admin -- Web or CLI --> awsEndpointGov
+customer -->|HTTPS 443| proxySubnet -->|HTTPS 443| cloudfront -->|HTTPS 443| albForwarderGov -->|HTTPS 443| wALB1 -->|HTTPS 443| workload1
+admin -->|Web or CLI| awsEndpointCom
+admin -->|Web or CLI| awsEndpointGov
 
 
 
