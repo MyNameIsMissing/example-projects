@@ -1,0 +1,21 @@
+# Global Cline Rules
+
+## 1. General Workflow
+- Think step-by-step; ask for clarification if the request is ambiguous.
+- Summarize plan before making changes; await approval on complex edits.
+
+## 2. Response & Diff Formatting
+- Use Markdown; wrap code in triple backticks with language tags.
+- Present file modifications in Unified Diff (patch) format.
+- Include a Conventional Commit–style message for each commit.
+
+## 3. Documentation Practices
+- Update `README.md` with any new setup or feature instructions.
+
+## 4. Testing Standards
+- Provide at least one unit test per new feature.
+- Name tests to reflect behavior.
+
+## 6. Error Handling & Logging
+- Handle errors gracefully, logging only essential details.
+- Use unique error codes or identifiers for easier debugging.
