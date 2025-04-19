@@ -77,10 +77,15 @@ git push --no-verify
 ```
 
 ### How the Hooks Work
-The hooks are implemented as shell scripts in the `.git/hooks` directory:
+The hooks are implemented as shell scripts in the `.git-hooks` directory at the root of the repository:
 - They only run on JavaScript files in the javascriptapp directory
 - The pre-commit hook runs ESLint, Prettier, and related tests
 - The pre-push hook runs all tests with coverage checks
+
+To enable these hooks, run the following command from the root of the repository:
+```
+git config core.hooksPath .git-hooks
+```
 
 ## Technologies Used
 
