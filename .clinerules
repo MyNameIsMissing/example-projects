@@ -19,3 +19,6 @@
 ## 6. Error Handling & Logging
 - Handle errors gracefully, logging only essential details.
 - Use unique error codes or identifiers for easier debugging.
+
+## 6. CI considerations
+- Make sure changes are not committed directly to the `main` branch

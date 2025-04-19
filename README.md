@@ -20,6 +20,18 @@ git config core.hooksPath .git-hooks
 
 For more information about the available hooks and how to use them, see the [.git-hooks/README.md](.git-hooks/README.md) file.
 
+### Secret Scanning with Gitleaks
+
+A pre-commit hook has been added to scan for secrets using [gitleaks](https://github.com/gitleaks/gitleaks). To use this hook, please install gitleaks on your system.
+
+If you are using macOS, you can install gitleaks via Homebrew:
+
+```bash
+brew install gitleaks
+```
+
+The pre-commit hook will block commits if any secrets are detected in the staged files.
+
 ## Note
 
 This repository is part of an AI experimentation project and is not actively maintained. Contributions are not being accepted at this time.
