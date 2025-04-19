@@ -44,9 +44,48 @@ The app will be available at http://localhost:3000
 - public/ - Static frontend files
   - index.html - Main web interface
 - tests/ - Jest test files
+- .eslintrc.js - ESLint configuration
+- .prettierrc.js - Prettier configuration
+
+## Git Hooks
+
+This project uses Git hooks to ensure code quality and test coverage:
+
+### Pre-commit Hook
+The pre-commit hook runs automatically before each commit and:
+- Lints JavaScript files with ESLint
+- Formats code with Prettier
+- Runs tests related to changed files
+
+To run these checks manually:
+```
+npm run lint      # Check for linting issues
+npm run lint:fix  # Fix linting issues automatically
+npm run format    # Format code with Prettier
+```
+
+### Pre-push Hook
+The pre-push hook runs automatically before each push and:
+- Runs all tests with coverage
+- Ensures code coverage meets minimum thresholds (80%)
+- Checks for skipped tests
+
+To bypass hooks in emergency situations (not recommended):
+```
+git commit --no-verify
+git push --no-verify
+```
+
+### How the Hooks Work
+The hooks are implemented as shell scripts in the `.git/hooks` directory:
+- They only run on JavaScript files in the javascriptapp directory
+- The pre-commit hook runs ESLint, Prettier, and related tests
+- The pre-push hook runs all tests with coverage checks
 
 ## Technologies Used
 
 Express.js - Backend server  
 Jest - Testing framework  
 SuperTest - HTTP testing library  
+ESLint - Code quality tool  
+Prettier - Code formatter
