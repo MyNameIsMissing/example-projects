@@ -10,7 +10,7 @@ const API_KEY = process.env.OPENWEATHER_API_KEY;
 // Serve static files from the "public" folder
 app.use(express.static(path.join(__dirname, 'public')));
 
-// GET /api/weather?city=London - Endpoint to fetch weather data
+// GET /api/weather?city=London - Endpoint to fetch weather data from OpenWeather API
 app.get('/api/weather', async (req, res) => {
   try {
     const city = req.query.city;
