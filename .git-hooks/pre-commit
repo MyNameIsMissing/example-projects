@@ -1,0 +1,50 @@
+#!/bin/sh
+
+# This is the pre-commit hook that runs before each commit
+# It ensures that code quality standards are met before allowing the commit to proceed
+
+# Exit immediately if a command exits with a non-zero status
+set -e
+
+# Get the root directory of the git repository
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+
+# Check if the staged files include JavaScript files in the javascriptapp directory
+STAGED_JS_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^javascriptapp/.*\.js$' || true)
+
+# If no JavaScript files in the javascriptapp directory are staged, exit early
+if [ -z "$STAGED_JS_FILES" ]; then
+  echo "No JavaScript files in javascriptapp directory were staged. Skipping pre-commit hooks."
+  exit 0
+fi
+
+# Change directory to the javascriptapp directory
+cd "$ROOT_DIR/javascriptapp"
+
+# Extract just the filenames without the javascriptapp/ prefix
+JS_FILES_WITHOUT_PREFIX=$(echo "$STAGED_JS_FILES" | sed 's|^javascriptapp/||')
+
+echo "Running pre-commit hooks for JavaScript files..."
+  
+  # Run ESLint on staged JavaScript files
+  echo "Running ESLint..."
+  npx eslint --fix $JS_FILES_WITHOUT_PREFIX
+  
+  # Run Prettier on staged JavaScript files
+  echo "Running Prettier..."
+  npx prettier --write $JS_FILES_WITHOUT_PREFIX
+  
+  # Run Jest tests related to the changed files
+  echo "Running Jest tests..."
+  npx jest --findRelatedTests --passWithNoTests $JS_FILES_WITHOUT_PREFIX
+  
+  # Add the fixed files back to the staging area
+  cd "$ROOT_DIR"
+  for file in $STAGED_JS_FILES; do
+    git add "$file"
+  done
+  
+  echo "Pre-commit hooks completed successfully!"
+
+# If all checks pass, the commit will proceed
+# If any check fails, the commit will be aborted

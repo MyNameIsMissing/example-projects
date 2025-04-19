@@ -1,0 +1,40 @@
+#!/bin/sh
+
+# This is the pre-push hook that runs before each push to the remote repository
+# It ensures that all tests pass and meet coverage thresholds before allowing the push to proceed
+
+# Exit immediately if a command exits with a non-zero status
+set -e
+
+# Get the root directory of the git repository
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+
+# Check if we're pushing changes to the javascriptapp directory
+CHANGED_FILES=$(git diff --name-only HEAD@{1} HEAD 2>/dev/null | grep -E '^javascriptapp/' || true)
+
+# If no files in the javascriptapp directory are changed, exit early
+if [ -z "$CHANGED_FILES" ]; then
+  echo "No changes to javascriptapp directory. Skipping pre-push hooks."
+  exit 0
+fi
+
+# Change directory to the javascriptapp directory
+cd "$ROOT_DIR/javascriptapp"
+
+echo "Running pre-push hooks for javascriptapp..."
+
+# Run Jest tests with coverage
+echo "Running Jest tests with coverage..."
+npx jest --coverage --coverageThreshold='{"global":{"statements":80,"branches":80,"functions":80,"lines":80}}'
+
+# Check for skipped tests (tests marked with .skip or .only)
+echo "Checking for skipped or focused tests..."
+if grep -r --include="*.test.js" --include="*.spec.js" -E "(describe|it|test)\.only|\.skip" tests/; then
+  echo "Error: Found skipped or focused tests. Please remove .skip or .only from your tests."
+  exit 1
+fi
+
+echo "Pre-push hooks completed successfully!"
+
+# If all checks pass, the push will proceed
+# If any check fails, the push will be aborted
