@@ -1,5 +1,8 @@
 const request = require('supertest');
 const app = require('../server');
+const { JSDOM } = require('jsdom');
+const fs = require('fs');
+const path = require('path');
 
 describe('Weather API', () => {
   it('returns weather data for a valid city', async () => {
@@ -8,8 +11,29 @@ describe('Weather API', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toHaveProperty('name', 'London');
+    // Branch coverage for description line 31: test with description present
     expect(response.body).toHaveProperty('description');
+    expect(typeof response.body.description).toBe('string');
+    expect(response.body.description.length).toBeGreaterThan(0);
     expect(response.body).toHaveProperty('temp');
+  });
+
+  it('returns weather data with empty description', async () => {
+    // Mock fetch to return data with no description
+    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        name: 'TestCity',
+        weather: [{}],
+        main: { temp: 70, feels_like: 65 },
+        wind: { speed: 5 }
+      }),
+    });
+
+    const response = await request(app).get('/api/weather?city=TestCity');
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toHaveProperty('description', '');
+    global.fetch.mockRestore();
   });
 
   it('returns 400 if city is missing', async () => {
@@ -20,17 +44,15 @@ describe('Weather API', () => {
 });
 
 describe('Weather API error handling', () => {
-  // Before each test, spy on the global fetch (Node 18+) or require('node-fetch') if using that
   beforeEach(() => {
-    jest.spyOn(global, 'fetch'); // if on Node 18+, 'global.fetch' is the built-in
+    jest.spyOn(global, 'fetch');
   });
 
   afterEach(() => {
-    global.fetch.mockRestore(); // restore original fetch
+    global.fetch.mockRestore();
   });
 
   it('handles non-OK response from OpenWeather', async () => {
-    // Force fetch to return { ok: false, status: 404, ... }
     global.fetch.mockResolvedValue({
       ok: false,
       status: 404,
@@ -38,18 +60,63 @@ describe('Weather API error handling', () => {
     });
 
     const response = await request(app).get('/api/weather?city=FakeCity');
-    // The code sets status to response.status => 404 in this case
     expect(response.statusCode).toBe(404);
     expect(response.body).toHaveProperty('error', 'Failed to fetch weather data');
   });
 
   it('handles fetch throw (network error, etc.)', async () => {
-    // Force fetch to throw an error
     global.fetch.mockRejectedValue(new Error('Network error'));
 
     const response = await request(app).get('/api/weather?city=FakeCity2');
-    // The code should catch and return status 500, { error: 'Server error' }
     expect(response.statusCode).toBe(500);
     expect(response.body).toHaveProperty('error', 'Server error');
+  });
+});
+
+describe('Frontend script', () => {
+  let window;
+  let document;
+
+  beforeEach(() => {
+    const dom = new JSDOM(`
+      <select id="citySelect">
+        <option value="">Select a city...</option>
+      </select>
+      <button id="getWeatherBtn">Get Weather</button>
+      <p id="errorMessage" class="error"></p>
+    `, { runScripts: "dangerously", resources: "usable" });
+
+    window = dom.window;
+    document = window.document;
+
+    global.document = document;
+    global.window = window;
+
+    global.fetch = jest.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(['City1', 'City2']),
+      })
+    );
+
+    const scriptContent = fs.readFileSync(path.resolve(__dirname, '../public/script.js'), 'utf-8');
+    const scriptEl = document.createElement('script');
+    scriptEl.textContent = scriptContent;
+    document.body.appendChild(scriptEl);
+  });
+
+  afterEach(() => {
+    delete global.document;
+    delete global.window;
+    delete global.fetch;
+  });
+
+  it('shows error if no city selected', () => {
+    const getWeatherBtn = document.getElementById('getWeatherBtn');
+    const errorMessage = document.getElementById('errorMessage');
+
+    getWeatherBtn.click();
+
+    expect(errorMessage.textContent).toBe('Please select a city!');
   });
 });

@@ -1,5 +1,5 @@
 const getWeatherBtn = document.getElementById('getWeatherBtn');
-const cityInput = document.getElementById('cityInput');
+const citySelect = document.getElementById('citySelect');
 
 const weatherTitle = document.getElementById('weatherTitle');
 const weatherIcon = document.getElementById('weatherIcon');
@@ -9,14 +9,32 @@ const feelsLike = document.getElementById('feelsLike');
 const windSpeed = document.getElementById('windSpeed');
 const errorMessage = document.getElementById('errorMessage');
 
+async function loadCities() {
+  try {
+    const response = await fetch('cities.json');
+    if (!response.ok) {
+      throw new Error('Failed to load cities');
+    }
+    const cities = await response.json();
+    cities.forEach(city => {
+      const option = document.createElement('option');
+      option.value = city;
+      option.textContent = city;
+      citySelect.appendChild(option);
+    });
+  } catch (error) {
+    errorMessage.textContent = error.message;
+  }
+}
+
 getWeatherBtn.addEventListener('click', async () => {
-  const city = cityInput.value.trim();
+  const city = citySelect.value.trim();
   if (!city) {
-    errorMessage.textContent = "Please enter a city!";
+    errorMessage.textContent = "Please select a city!";
     return;
   }
 
-  // Clear previous content
+  // Clear previous content and error message
   weatherTitle.textContent = "";
   weatherIcon.src = "";
   weatherDescription.textContent = "";
@@ -49,7 +67,12 @@ getWeatherBtn.addEventListener('click', async () => {
       weatherIcon.alt = data.description || "Weather Icon";
       weatherIcon.style.display = "inline-block"; 
     }
+
+    // Clear error message on successful fetch
+    errorMessage.textContent = "";
   } catch (error) {
     errorMessage.textContent = error.message;
   }
 });
+
+loadCities();
