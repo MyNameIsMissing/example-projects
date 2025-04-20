@@ -29,8 +29,15 @@ A simple weather application that displays current weather conditions for any ci
 
 ## Testing
 
-Run the test suite with coverage report:  
+Run the quality test suite with coverage report:  
 `npm test`
+
+### Running Security Tests
+
+This app includes a separate suite of security tests focused on injection attack scenarios. These tests ensure the backend API safely handles potentially malicious input.
+
+To run the security tests, execute:   
+`npm run test:security`
 
 ## Running Locally
 
@@ -94,3 +101,4 @@ Jest - Testing framework
 SuperTest - HTTP testing library  
 ESLint - Code quality tool  
 Prettier - Code formatter
+

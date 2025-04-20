@@ -8,7 +8,8 @@
     "start": "node server.js",
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "test:security": "jest tests/security.test.js"
   },
   "keywords": [],
   "author": "",
