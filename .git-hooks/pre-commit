@@ -26,6 +26,31 @@ if [ -n "$STAGED_FILES" ]; then
   fi
 fi
 
+# Check if the staged files include GitHub Actions workflow files
+STAGED_WORKFLOW_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^\.github/workflows/.*\.ya?ml$' || true)
+
+# If GitHub Actions workflow files are staged, run zizmor
+if [ -n "$STAGED_WORKFLOW_FILES" ]; then
+  echo "Running zizmor to check GitHub Actions workflows..."
+  
+  # Check if zizmor is installed
+  if ! command -v zizmor >/dev/null 2>&1; then
+    echo "zizmor is not installed. Please install it and try again."
+    exit 1
+  fi
+  
+  # Run zizmor on each staged workflow file with pedantic persona and medium thresholds
+  for file in $STAGED_WORKFLOW_FILES; do
+    echo "Checking $file with zizmor (pedantic mode, medium+ severity/confidence)..."
+    if ! zizmor --persona=pedantic --min-severity=medium --min-confidence=medium "$ROOT_DIR/$file"; then
+      echo "Zizmor detected issues in $file. Commit aborted."
+      exit 1
+    fi
+  done
+  
+  echo "All GitHub Actions workflows passed zizmor security checks!"
+fi
+
 # Check if the staged files include JavaScript files in the javascriptapp directory
 STAGED_JS_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^javascriptapp/.*\.js$' || true)
 

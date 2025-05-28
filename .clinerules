@@ -20,5 +20,17 @@
 - Handle errors gracefully, logging only essential details.
 - Use unique error codes or identifiers for easier debugging.
 
-## 6. CI considerations
+## 7. CI considerations
 - Make sure changes are not committed directly to the `main` branch
+
+## 8. Exclusions
+exclude:
+  - "*.png"
+
+## 9. Context limits
+context:
+  handoff_threshold: 50%
+  carry_over:
+    - summaries
+    - file_states
+    - next_steps
