@@ -1,0 +1,45 @@
+name: Zizmor Security Scan
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  zizmor-scan:
+    runs-on: ubuntu-latest
+    name: Zizmor GitHub Actions Security Scan
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust and zizmor
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source ~/.cargo/env
+          cargo install zizmor
+
+      - name: Run zizmor security scan
+        run: |
+          source ~/.cargo/env
+          zizmor --persona=pedantic --min-severity=medium --min-confidence=medium --format=sarif .github/workflows/ > zizmor.sarif
+        continue-on-error: true
+
+      - name: Upload SARIF results to GitHub
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: zizmor.sarif
+          category: zizmor
+        if: always()
