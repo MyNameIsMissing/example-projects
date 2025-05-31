@@ -10,48 +10,103 @@ config:
 flowchart TB
 
 %%External entities or services
-customer{Web App Customers}
-admin{System Administrators}
+customer(["fa:fa-users Web App Customers"])
+admin(["fa:fa-user-shield System Administrators"])
 
 %%Accreditation boundary
-subgraph Cloud PaaS
-  subgraph AWS Commercial Org
-    subgraph Web Access Account
-      route53[Route 53]
-      cloudfront[CloudFront]
+subgraph sg_cloud_paas ["Cloud PaaS"]
+  classDef cloudPaaS fill:#F5F5F5,stroke:#333333,stroke-width:4px,color:#000000
+  class sg_cloud_paas cloudPaaS
+
+  subgraph sg_aws_comm_org ["AWS Commercial Org"]
+    classDef commercialOrg fill:#FFFACD,stroke:#555555,stroke-width:3px,color:#333333
+    class sg_aws_comm_org commercialOrg
+
+    subgraph sg_web_access ["Web Access Account"]
+      classDef webAccessAcc fill:#FFDEAD,stroke:#777777,stroke-width:2px,color:#333333
+      class sg_web_access webAccessAcc
+      route53(["fa:fa-map-signs Route 53"])
+      cloudfront(["fa:fa-cloud-upload-alt CloudFront"])
     end
-    subgraph Commercial Transit Account
-      awsnetfirewall[AWS Network Firewall]
-      awsXit[AWS Transit Gateway]
+    subgraph sg_comm_transit ["Commercial Transit Account"]
+      classDef commTransitAcc fill:#FFDEAD,stroke:#777777,stroke-width:2px,color:#333333
+      class sg_comm_transit commTransitAcc
+      awsnetfirewall(["fa:fa-shield-alt AWS Network Firewall"])
+      awsXit(["fa:fa-random AWS Transit Gateway"])
     end
   end
-  subgraph AWS GovCloud Org
-    subgraph Prod Accounts
-      ALB[Application Load Balancer]
-      appContainer{Web Front End}
-      auth[Authentication Service]
+  subgraph sg_aws_gov ["AWS GovCloud Org"]
+    classDef govCloudOrg fill:#ADD8E6,stroke:#555555,stroke-width:3px,color:#333333
+    class sg_aws_gov govCloudOrg
+
+    subgraph sg_prod_acc ["Prod Accounts"]
+      classDef prodAcc fill:#B0E0E6,stroke:#777777,stroke-width:2px,color:#333333
+      class sg_prod_acc prodAcc
+      ALB(["fa:fa-balance-scale Application Load Balancer"])
+      appContainer(["fa:fa-server Web Front End"])
+      auth(["fa:fa-key Authentication Service"])
     end
-    subgraph Security
-      vulnScanner[Vulnerability Scanners]
-      logging[Centralized Logging]
+    subgraph sg_security ["Security"]
+      classDef secAcc fill:#90EE90,stroke:#777777,stroke-width:2px,color:#333333
+      class sg_security secAcc
+      vulnScanner(["fa:fa-search Vulnerability Scanners"])
+      logging(["fa:fa-archive Centralized Logging"])
     end
-    subgraph Transit
-      awsXitG[AWS Transit Gateway]
-      awsnetfirewallG[AWS Network Firewall]
+    subgraph sg_transit_gov ["Transit"]
+      classDef transitAcc fill:#B0E0E6,stroke:#777777,stroke-width:2px,color:#333333
+      class sg_transit_gov transitAcc
+      awsXitG(["fa:fa-random AWS Transit Gateway"])
+      awsnetfirewallG(["fa:fa-shield-alt AWS Network Firewall"])
     end
-    subgraph Orchestration
-      orchestrator[Platform Orchestrator Tools]
+    subgraph sg_orchestration ["Orchestration"]
+      classDef orchAcc fill:#E0FFFF,stroke:#777777,stroke-width:2px,color:#333333
+      class sg_orchestration orchAcc
+      orchestrator(["fa:fa-cogs Platform Orchestrator Tools"])
     end
-    subgraph Dev and Stage
-      devResources[Dev Resources]
-      stageResources[Staging Resources]
+    subgraph sg_dev_stage ["Dev and Stage"]
+      classDef devStageAcc fill:#F0E68C,stroke:#777777,stroke-width:2px,color:#333333
+      class sg_dev_stage devStageAcc
+      devResources(["fa:fa-code Dev Resources"])
+      stageResources(["fa:fa-flask Staging Resources"])
     end
   end
 end
 
+%% Styles for Nodes
+style customer fill:#AFEEEE,stroke:#333333,stroke-width:2px,color:#000000
+style admin fill:#DDA0DD,stroke:#333333,stroke-width:2px,color:#000000
+
+style route53 fill:#FFD700,stroke:#333333,stroke-width:2px,color:#000000
+style cloudfront fill:#FFD700,stroke:#333333,stroke-width:2px,color:#000000
+style awsnetfirewall fill:#FFD700,stroke:#333333,stroke-width:2px,color:#000000
+style awsXit fill:#FFD700,stroke:#333333,stroke-width:2px,color:#000000
+
+style ALB fill:#87CEFA,stroke:#333333,stroke-width:2px,color:#000000
+style appContainer fill:#87CEFA,stroke:#333333,stroke-width:2px,color:#000000
+style auth fill:#87CEFA,stroke:#333333,stroke-width:2px,color:#000000
+
+style vulnScanner fill:#3CB371,stroke:#333333,stroke-width:2px,color:#000000
+style logging fill:#3CB371,stroke:#333333,stroke-width:2px,color:#000000
+
+style awsXitG fill:#40E0D0,stroke:#333333,stroke-width:2px,color:#000000
+style awsnetfirewallG fill:#40E0D0,stroke:#333333,stroke-width:2px,color:#000000
+
+style orchestrator fill:#AFEEEE,stroke:#333333,stroke-width:2px,color:#000000
+
+style devResources fill:#FAFAD2,stroke:#333333,stroke-width:2px,color:#000000
+style stageResources fill:#FAFAD2,stroke:#333333,stroke-width:2px,color:#000000
+
 %%Connections
-customer -->|HTTPS 443| cloudfront -->|HTTPS 443| ALB -->|HTTPS 443| appContainer
-admin -->|Web or CLI| awsnetfirewall --> awsXit --> awsXitG
+customer -->|HTTPS 443| cloudfront
+cloudfront -->|HTTPS 443| ALB
+ALB -->|HTTPS 443| appContainer
+admin -->|Web or CLI| awsnetfirewall
+awsnetfirewall --> awsXit
+awsXit --> awsXitG
 awsXitG --> orchestrator
-orchestrator --> devResources & stageResources & appContainer
-Security -.audits.-> devResources & stageResources & appContainer
+orchestrator --> devResources
+orchestrator --> stageResources
+orchestrator --> appContainer
+sg_security -.audits.-> devResources
+sg_security -.audits.-> stageResources
+sg_security -.audits.-> appContainer
