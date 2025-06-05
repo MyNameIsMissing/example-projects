@@ -4,6 +4,7 @@ This repository contains various projects and examples used for AI experimentati
 
 ## Structure
 
+- **document-enhancer/**: An AI-powered document image enhancement application using Real-ESRGAN for upscaling and improving the readability of blurry document images.
 - **goapp/**: A Go application that fetches and displays stock data using the Alpha Vantage API.
 - **javascriptapp/**: A simple JavaScript application with tests and coverage reports.
 - **mermaid_diagrams/**: Examples of using Mermaid to create diagrams for various architectures and workflows.

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Enhancer - AI Image Enhancement</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Document Enhancer</h1>
+            <p>AI-powered image enhancement for blurry documents</p>
+        </header>
+
+        <main>
+            <!-- Upload Section -->
+            <section class="upload-section" id="uploadSection">
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📄</div>
+                    <h3>Drop your document image here</h3>
+                    <p>or <span class="browse-link" id="browseLink">browse files</span></p>
+                    <p class="file-info">Supports PNG and JPEG files up to 10MB</p>
+                    <input type="file" id="fileInput" accept="image/png,image/jpeg" hidden>
+                </div>
+            </section>
+
+            <!-- Processing Section -->
+            <section class="processing-section" id="processingSection" style="display: none;">
+                <div class="image-preview">
+                    <h3>Original Image</h3>
+                    <div class="image-container">
+                        <img id="originalImage" alt="Original document">
+                        <div class="image-info" id="originalInfo"></div>
+                    </div>
+                </div>
+
+                <div class="enhancement-controls">
+                    <button id="enhanceBtn" class="enhance-btn">
+                        <span class="btn-text">Enhance Image</span>
+                        <span class="btn-loader" style="display: none;">🔄</span>
+                    </button>
+                    <div class="status-message" id="statusMessage"></div>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section class="results-section" id="resultsSection" style="display: none;">
+                <div class="comparison-container">
+                    <div class="image-comparison">
+                        <div class="comparison-item">
+                            <h3>Original</h3>
+                            <div class="image-container">
+                                <img id="originalCompare" alt="Original document">
+                                <div class="image-info" id="originalCompareInfo"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="comparison-divider">
+                            <div class="vs-badge">VS</div>
+                        </div>
+                        
+                        <div class="comparison-item">
+                            <h3>Enhanced</h3>
+                            <div class="image-container">
+                                <img id="enhancedImage" alt="Enhanced document">
+                                <div class="image-info" id="enhancedInfo"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="action-buttons">
+                    <button id="downloadBtn" class="download-btn">
+                        📥 Download Enhanced Image
+                    </button>
+                    <button id="newImageBtn" class="secondary-btn">
+                        🔄 Process New Image
+                    </button>
+                </div>
+            </section>
+
+            <!-- Error Section -->
+            <section class="error-section" id="errorSection" style="display: none;">
+                <div class="error-message">
+                    <div class="error-icon">⚠️</div>
+                    <h3>Something went wrong</h3>
+                    <p id="errorText"></p>
+                    <button id="retryBtn" class="retry-btn">Try Again</button>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>Powered by Real-ESRGAN AI Model</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
