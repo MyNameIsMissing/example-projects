@@ -64,7 +64,7 @@ const processingStatus = new Map();
 const isValidUUID = (id) => /^[0-9a-fA-F-]{36}$/.test(id);
 
 // Routes
-app.get('/', (req, res) => {
+app.get('/', apiLimiter, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
@@ -211,7 +211,7 @@ app.get('/api/status/:fileId', (req, res) => {
 });
 
 // Download endpoint
-app.get('/api/download/:fileId', async (req, res) => {
+app.get('/api/download/:fileId', heavyOpLimiter, async (req, res) => {
   try {
     const fileId = req.params.fileId;
     if (!isValidUUID(fileId)) {
@@ -233,7 +233,7 @@ app.get('/api/download/:fileId', async (req, res) => {
 });
 
 // Cleanup endpoint (optional - for removing old files)
-app.delete('/api/cleanup/:fileId', async (req, res) => {
+app.delete('/api/cleanup/:fileId', heavyOpLimiter, async (req, res) => {
   try {
     const fileId = req.params.fileId;
     if (!isValidUUID(fileId)) {
