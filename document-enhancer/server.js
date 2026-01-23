@@ -5,6 +5,7 @@ const fs = require('fs').promises;
 const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
 const imageProcessor = require('./utils/imageProcessor');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -13,6 +14,22 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Rate limiting configuration
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const heavyOpLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20, // Limit each IP to 20 heavy operations per hour
+  message: 'Too many processing requests from this IP, please try again later.'
+});
+
+app.use('/api', apiLimiter);
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -52,7 +69,7 @@ app.get('/', (req, res) => {
 });
 
 // Upload endpoint
-app.post('/api/upload', upload.single('image'), async (req, res) => {
+app.post('/api/upload', heavyOpLimiter, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -128,7 +145,7 @@ app.get('/api/image/:fileId/enhanced', async (req, res) => {
 });
 
 // Enhancement endpoint
-app.post('/api/enhance/:fileId', async (req, res) => {
+app.post('/api/enhance/:fileId', heavyOpLimiter, async (req, res) => {
   try {
     const fileId = req.params.fileId;
     if (!isValidUUID(fileId)) {
