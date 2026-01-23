@@ -21,7 +21,8 @@ const storage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const uniqueId = uuidv4();
-    cb(null, `${uniqueId}_${file.originalname}`);
+    const safeName = path.basename(file.originalname).replace(/[^a-zA-Z0-9.-]/g, '_');
+    cb(null, `${uniqueId}_${safeName}`);
   }
 });
 
@@ -41,6 +42,9 @@ const upload = multer({
 
 // Store processing status
 const processingStatus = new Map();
+
+// Helper to validate UUIDs
+const isValidUUID = (id) => /^[0-9a-fA-F-]{36}$/.test(id);
 
 // Routes
 app.get('/', (req, res) => {
@@ -81,6 +85,10 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
 app.get('/api/image/:fileId/original', async (req, res) => {
   try {
     const fileId = req.params.fileId;
+    if (!isValidUUID(fileId)) {
+      return res.status(400).json({ error: 'Invalid file ID' });
+    }
+
     const tempDir = path.join(__dirname, 'temp');
     const files = await fs.readdir(tempDir);
     const originalFile = files.find(file => file.startsWith(fileId));
@@ -101,6 +109,10 @@ app.get('/api/image/:fileId/original', async (req, res) => {
 app.get('/api/image/:fileId/enhanced', async (req, res) => {
   try {
     const fileId = req.params.fileId;
+    if (!isValidUUID(fileId)) {
+      return res.status(400).json({ error: 'Invalid file ID' });
+    }
+
     const enhancedPath = path.join(__dirname, 'temp', `${fileId}_enhanced.png`);
     
     try {
@@ -119,6 +131,9 @@ app.get('/api/image/:fileId/enhanced', async (req, res) => {
 app.post('/api/enhance/:fileId', async (req, res) => {
   try {
     const fileId = req.params.fileId;
+    if (!isValidUUID(fileId)) {
+      return res.status(400).json({ error: 'Invalid file ID' });
+    }
     
     // Check if already processing
     if (processingStatus.get(fileId) === 'processing') {
@@ -166,6 +181,10 @@ app.post('/api/enhance/:fileId', async (req, res) => {
 // Status endpoint
 app.get('/api/status/:fileId', (req, res) => {
   const fileId = req.params.fileId;
+  if (!isValidUUID(fileId)) {
+    return res.status(400).json({ error: 'Invalid file ID' });
+  }
+
   const status = processingStatus.get(fileId) || 'not_found';
   
   res.json({ 
@@ -178,6 +197,10 @@ app.get('/api/status/:fileId', (req, res) => {
 app.get('/api/download/:fileId', async (req, res) => {
   try {
     const fileId = req.params.fileId;
+    if (!isValidUUID(fileId)) {
+      return res.status(400).json({ error: 'Invalid file ID' });
+    }
+
     const enhancedPath = path.join(__dirname, 'temp', `${fileId}_enhanced.png`);
     
     try {
@@ -196,6 +219,10 @@ app.get('/api/download/:fileId', async (req, res) => {
 app.delete('/api/cleanup/:fileId', async (req, res) => {
   try {
     const fileId = req.params.fileId;
+    if (!isValidUUID(fileId)) {
+      return res.status(400).json({ error: 'Invalid file ID' });
+    }
+
     const tempDir = path.join(__dirname, 'temp');
     const files = await fs.readdir(tempDir);
     
