@@ -130,7 +130,7 @@ app.get('/api/image/:fileId/enhanced', async (req, res) => {
       return res.status(400).json({ error: 'Invalid file ID' });
     }
 
-    const enhancedPath = path.join(__dirname, 'temp', `${fileId}_enhanced.png`);
+    const enhancedPath = path.join(__dirname, 'temp', `${path.basename(fileId)}_enhanced.png`);
     
     try {
       await fs.access(enhancedPath);
@@ -218,7 +218,7 @@ app.get('/api/download/:fileId', heavyOpLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Invalid file ID' });
     }
 
-    const enhancedPath = path.join(__dirname, 'temp', `${fileId}_enhanced.png`);
+    const enhancedPath = path.join(__dirname, 'temp', `${path.basename(fileId)}_enhanced.png`);
     
     try {
       await fs.access(enhancedPath);

@@ -55,6 +55,11 @@ class ImageProcessor {
    */
   async enhanceImage(inputPath, outputPath) {
     try {
+      // Security check: Prevent path traversal
+      if (inputPath.includes('..') || outputPath.includes('..')) {
+        throw new Error('Security Error: Path traversal detected in image paths');
+      }
+
       // Check if Real-ESRGAN is available
       const isAvailable = await this.checkRealESRGAN();
       if (!isAvailable) {
