@@ -151,6 +151,8 @@ The model is approximately 67MB and will be downloaded automatically on first us
 document-enhancer/
 ├── package.json          # Node.js dependencies and scripts
 ├── server.js             # Express server and API routes
+├── setup.sh              # Setup script for dependencies
+├── LICENSE               # License file
 ├── README.md             # This file
 ├── public/               # Frontend files
 │   ├── index.html        # Main HTML page
