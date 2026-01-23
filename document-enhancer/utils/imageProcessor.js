@@ -55,9 +55,13 @@ class ImageProcessor {
    */
   async enhanceImage(inputPath, outputPath) {
     try {
-      // Security check: Prevent path traversal
-      if (inputPath.includes('..') || outputPath.includes('..')) {
-        throw new Error('Security Error: Path traversal detected in image paths');
+      // Security check: Ensure paths are within the temp directory
+      const tempDir = path.resolve(path.join(__dirname, '..', 'temp')) + path.sep;
+      const safeInput = path.resolve(inputPath);
+      const safeOutput = path.resolve(outputPath);
+
+      if (!safeInput.startsWith(tempDir) || !safeOutput.startsWith(tempDir)) {
+        throw new Error('Security Error: Path traversal detected');
       }
 
       // Check if Real-ESRGAN is available
@@ -140,7 +144,7 @@ if __name__ == "__main__":
 
       // Execute the Python script
       return new Promise((resolve, reject) => {
-        const enhanceProcess = spawn('python3', [tempScriptPath, inputPath, outputPath]);
+        const enhanceProcess = spawn('python3', [tempScriptPath, safeInput, safeOutput]);
         
         let stdout = '';
         let stderr = '';
