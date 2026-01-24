@@ -23,6 +23,7 @@ class DocumentEnhancer {
         this.btnText = this.enhanceBtn.querySelector('.btn-text');
         this.btnLoader = this.enhanceBtn.querySelector('.btn-loader');
         this.statusMessage = document.getElementById('statusMessage');
+        this.scaleInputs = document.querySelectorAll('input[name="scale"]');
 
         // Results elements
         this.resultsSection = document.getElementById('resultsSection');
@@ -163,7 +164,8 @@ class DocumentEnhancer {
         this.showStatus('Starting enhancement...', 'processing');
 
         try {
-            const response = await fetch(`/api/enhance/${this.currentFileId}`, {
+            const scale = this.getSelectedScale();
+            const response = await fetch(`/api/enhance/${this.currentFileId}?scale=${scale}`, {
                 method: 'POST'
             });
 
@@ -200,9 +202,20 @@ class DocumentEnhancer {
                         this.showError('Enhancement failed. Please try again.');
                         this.resetEnhanceButton();
                         break;
-                    case 'processing':
-                        // Continue polling
+                    case 'processing': {
+                        const phaseText = this.formatPhase(result.phase);
+                        if (typeof result.progress === 'number') {
+                            const percent = Math.round(result.progress * 100);
+                            const eta = this.formatEta(result.etaSeconds);
+                            const etaText = eta ? ` (ETA ${eta})` : '';
+                            this.showStatus(`${phaseText} ${percent}%${etaText}`, 'processing');
+                        } else if (phaseText) {
+                            const elapsed = this.formatElapsed(result.startedAt);
+                            const elapsedText = elapsed ? ` (${elapsed})` : '';
+                            this.showStatus(`${phaseText}${elapsedText}`, 'processing');
+                        }
                         break;
+                    }
                     default:
                         this.clearStatusPolling();
                         this.showError('Unknown status. Please try again.');
@@ -270,8 +283,10 @@ class DocumentEnhancer {
             link.click();
             document.body.removeChild(link);
 
-            // Call cleanup after download is initiated
-            this.cleanupFiles(this.currentFileId);
+            // Delay cleanup to avoid deleting the file before the download starts
+            setTimeout(() => {
+                this.cleanupFiles(this.currentFileId);
+            }, 10000);
         } catch (error) {
             this.showError(`Download failed: ${error.message}`);
         }
@@ -328,6 +343,49 @@ class DocumentEnhancer {
         this.statusMessage.textContent = message;
         this.statusMessage.className = `status-message ${type}`;
         this.statusMessage.style.display = 'block';
+    }
+
+    getSelectedScale() {
+        const selected = Array.from(this.scaleInputs).find((input) => input.checked);
+        return selected ? selected.value : '4';
+    }
+
+    formatEta(seconds) {
+        if (!Number.isFinite(seconds) || seconds === null) {
+            return '';
+        }
+        const totalSeconds = Math.max(0, Math.round(seconds));
+        const mins = Math.floor(totalSeconds / 60);
+        const secs = totalSeconds % 60;
+        if (mins > 0) {
+            return `${mins}m ${secs}s`;
+        }
+        return `${secs}s`;
+    }
+
+    formatElapsed(startedAt) {
+        if (!Number.isFinite(startedAt) || startedAt === null) {
+            return '';
+        }
+        const elapsedSeconds = (Date.now() - startedAt) / 1000;
+        return `elapsed ${this.formatEta(elapsedSeconds)}`;
+    }
+
+    formatPhase(phase) {
+        switch (phase) {
+            case 'initializing':
+                return 'Initializing model...';
+            case 'processing':
+                return 'Enhancement in progress...';
+            case 'writing_output':
+                return 'Writing output...';
+            case 'completed':
+                return 'Enhancement completed';
+            case 'failed':
+                return 'Enhancement failed';
+            default:
+                return '';
+        }
     }
 
     clearStatus() {

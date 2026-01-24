@@ -1,10 +1,29 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs').promises;
+const fsSync = require('fs');
 
 class ImageProcessor {
   constructor() {
     this.modelPath = path.join(__dirname, '..', 'models');
+    this.pythonCmd = this.resolvePythonCmd();
+    this.pipCmd = this.resolvePipCmd();
+  }
+
+  resolvePythonCmd() {
+    const venvPython = path.join(__dirname, '..', '.venv', 'bin', 'python');
+    if (fsSync.existsSync(venvPython)) {
+      return venvPython;
+    }
+    return 'python3';
+  }
+
+  resolvePipCmd() {
+    const venvPip = path.join(__dirname, '..', '.venv', 'bin', 'pip');
+    if (fsSync.existsSync(venvPip)) {
+      return venvPip;
+    }
+    return 'pip3';
   }
 
   /**
@@ -12,7 +31,7 @@ class ImageProcessor {
    */
   async checkRealESRGAN() {
     return new Promise((resolve) => {
-      const process = spawn('python3', ['-c', 'import realesrgan; print("OK")']);
+      const process = spawn(this.pythonCmd, ['-c', 'import realesrgan; print("OK")']);
       
       process.on('close', (code) => {
         resolve(code === 0);
@@ -31,7 +50,7 @@ class ImageProcessor {
     console.log('Installing Real-ESRGAN...');
     
     return new Promise((resolve, reject) => {
-      const installProcess = spawn('pip3', ['install', 'realesrgan', 'opencv-python', 'pillow'], {
+      const installProcess = spawn(this.pipCmd, ['install', 'realesrgan', 'opencv-python', 'pillow'], {
         stdio: 'inherit'
       });
       
@@ -53,7 +72,7 @@ class ImageProcessor {
   /**
    * Enhance image using Real-ESRGAN
    */
-  async enhanceImage(inputPath, outputPath) {
+  async enhanceImage(inputPath, outputPath, onProgress = () => {}, options = {}) {
     try {
       // Security check: Ensure paths are within the temp directory
       const tempDir = path.resolve(path.join(__dirname, '..', 'temp')) + path.sep;
@@ -81,6 +100,16 @@ class ImageProcessor {
       console.log(`Starting enhancement: ${inputPath} -> ${outputPath}`);
 
       // Create Python script for Real-ESRGAN processing
+      const envTile = Number.parseInt(process.env.REALESRGAN_TILE || '256', 10);
+      const envScale = Number.parseInt(process.env.REALESRGAN_SCALE || '4', 10);
+      const requestedTile = Number.parseInt(options.tile, 10);
+      const requestedScale = Number.parseInt(options.scale, 10);
+      const tileSize = Number.isFinite(requestedTile) && requestedTile > 0 ? requestedTile : (Number.isFinite(envTile) ? envTile : 256);
+      const scale = requestedScale === 2 || requestedScale === 4 ? requestedScale : (envScale === 2 || envScale === 4 ? envScale : 4);
+      const modelUrl = scale === 2
+        ? 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth'
+        : 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth';
+
       const pythonScript = `
 import sys
 import os
@@ -90,15 +119,18 @@ import cv2
 
 def enhance_image(input_path, output_path):
     try:
+        # Force CPU to avoid GPU-related crashes in headless environments
+        os.environ["CUDA_VISIBLE_DEVICES"] = ""
         # Initialize the model
-        model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=4)
+        model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=${scale})
         
         # Create upsampler
         upsampler = RealESRGANer(
-            scale=4,
-            model_path='https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth',
+            scale=${scale},
+            model_path='${modelUrl}',
             model=model,
-            tile=0,
+            # Use tiling to reduce memory usage on CPU-only machines
+            tile=${tileSize},
             tile_pad=10,
             pre_pad=0,
             half=False
@@ -109,21 +141,23 @@ def enhance_image(input_path, output_path):
         if img is None:
             raise Exception(f"Could not read image: {input_path}")
         
-        print(f"Input image shape: {img.shape}")
+        print("PHASE:processing", flush=True)
+        print(f"Input image shape: {img.shape}", flush=True)
         
         # Enhance the image
-        output, _ = upsampler.enhance(img, outscale=4)
+        output, _ = upsampler.enhance(img, outscale=${scale})
         
-        print(f"Output image shape: {output.shape}")
+        print(f"Output image shape: {output.shape}", flush=True)
         
         # Save the enhanced image
         cv2.imwrite(output_path, output)
         
-        print(f"Enhanced image saved to: {output_path}")
+        print("PHASE:writing_output", flush=True)
+        print(f"Enhanced image saved to: {output_path}", flush=True)
         return True
         
     except Exception as e:
-        print(f"Error during enhancement: {str(e)}")
+        print(f"Error during enhancement: {str(e)}", flush=True)
         return False
 
 if __name__ == "__main__":
@@ -143,23 +177,72 @@ if __name__ == "__main__":
       await fs.writeFile(tempScriptPath, pythonScript);
 
       // Execute the Python script
+      onProgress({ phase: 'initializing', progress: null, etaSeconds: null });
+
       return new Promise((resolve, reject) => {
-        const enhanceProcess = spawn('python3', [tempScriptPath, safeInput, safeOutput]);
+        const enhanceProcess = spawn(this.pythonCmd, ['-u', tempScriptPath, safeInput, safeOutput], {
+          env: { ...process.env, PYTHONUNBUFFERED: '1' }
+        });
         
         let stdout = '';
         let stderr = '';
+        const startTime = Date.now();
+        let lastTile = 0;
+        let lastTotal = 0;
+
+        const handleProgressLine = (line) => {
+          if (!line) {
+            return;
+          }
+          if (line.startsWith('PHASE:')) {
+            const phase = line.replace('PHASE:', '').trim();
+            onProgress({ phase, progress: null, etaSeconds: null });
+            return;
+          }
+          const match = line.match(/Tile\s+(\d+)\s*\/\s*(\d+)/i);
+          if (!match) {
+            return;
+          }
+          const current = Number.parseInt(match[1], 10);
+          const total = Number.parseInt(match[2], 10);
+          if (!Number.isFinite(current) || !Number.isFinite(total) || total <= 0) {
+            return;
+          }
+          if (current === lastTile && total === lastTotal) {
+            return;
+          }
+          lastTile = current;
+          lastTotal = total;
+          const elapsedSeconds = (Date.now() - startTime) / 1000;
+          const remaining = current > 0 ? Math.max(0, Math.round(elapsedSeconds * (total - current) / current)) : null;
+          onProgress({
+            current,
+            total,
+            progress: current / total,
+            etaSeconds: remaining,
+            phase: 'processing'
+          });
+        };
         
         enhanceProcess.stdout.on('data', (data) => {
           stdout += data.toString();
           console.log('Enhancement output:', data.toString().trim());
+          data
+            .toString()
+            .split('\n')
+            .forEach((line) => handleProgressLine(line.trim()));
         });
         
         enhanceProcess.stderr.on('data', (data) => {
           stderr += data.toString();
           console.error('Enhancement error:', data.toString().trim());
+          data
+            .toString()
+            .split('\n')
+            .forEach((line) => handleProgressLine(line.trim()));
         });
         
-        enhanceProcess.on('close', async (code) => {
+        enhanceProcess.on('close', async (code, signal) => {
           // Clean up temporary script
           try {
             await fs.unlink(tempScriptPath);
@@ -177,7 +260,9 @@ if __name__ == "__main__":
               reject(new Error('Enhancement completed but output file not found'));
             }
           } else {
-            reject(new Error(`Enhancement failed with code ${code}. Error: ${stderr}`));
+            const failReason = signal ? `signal ${signal}` : `code ${code}`;
+            const errorText = stderr || stdout;
+            reject(new Error(`Enhancement failed with ${failReason}. Error: ${errorText}`));
           }
         });
         

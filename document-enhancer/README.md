@@ -5,7 +5,7 @@ AI-powered document image enhancement application using Real-ESRGAN for upscalin
 ## Features
 
 - **Drag & Drop Upload**: Modern file upload interface with drag-and-drop support
-- **AI Enhancement**: Uses Real-ESRGAN x4plus model for high-quality image upscaling
+- **AI Enhancement**: Choose 2x (faster) or 4x (higher detail) Real-ESRGAN upscaling
 - **Side-by-Side Comparison**: View original vs enhanced images
 - **Download Enhanced**: Save improved images locally
 - **Real-time Progress**: Visual feedback during processing
@@ -22,7 +22,7 @@ AI-powered document image enhancement application using Real-ESRGAN for upscalin
 ## Prerequisites
 
 - Node.js (v14 or higher)
-- Python 3.x
+- Python 3.10 (recommended for Real-ESRGAN compatibility)
 - pip (Python package manager)
 
 ## Installation
@@ -31,6 +31,17 @@ AI-powered document image enhancement application using Real-ESRGAN for upscalin
     ```bash
     cd document-enhancer
     ```
+
+2.  **Install a local Python 3.10 without changing system Python (recommended)**:
+    Use a per-user Python manager like `pyenv` to install Python in your home directory.
+    ```bash
+    # One-time pyenv install (per user)
+    curl https://pyenv.run | bash
+    # Follow pyenv init instructions for your shell, then:
+    pyenv install 3.10.14
+    pyenv local 3.10.14
+    ```
+    This writes a `.python-version` file in this project folder and does not change system Python.
 
 2.  **Run the Setup Script (Recommended for first-time setup)**:
     A setup script `setup.sh` is provided to help install system dependencies (like those for OpenCV) and all necessary Python packages with specific compatible versions.
@@ -42,6 +53,7 @@ AI-powered document image enhancement application using Real-ESRGAN for upscalin
     This script typically only needs to be run once. It handles:
     - System dependencies (e.g., `libgl1-mesa-glx`)
     - Node.js dependencies (`npm install`)
+    - Python venv creation (`.venv` using Python 3.10)
     - Python packages (`realesrgan`, `opencv-python`, `pillow`, `numpy==1.24.4`, `torch==1.13.1`, `torchvision==0.14.1`, `torchaudio==0.13.1`)
 
 3.  **Manual Installation (Alternative)**:
@@ -56,18 +68,23 @@ AI-powered document image enhancement application using Real-ESRGAN for upscalin
         On Debian/Ubuntu-based systems:
         ```bash
         sudo apt-get update
-        sudo apt-get install -y libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1
+        # Ubuntu 24.04 uses libgl1 instead of libgl1-mesa-glx
+        sudo apt-get install -y libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1
         ```
 
     c.  **Install Python Dependencies**:
-        Ensure you have Python 3.x and pip installed.
+        Ensure you have Python 3.10 available (via `pyenv` or a local install).
         ```bash
-        pip3 install realesrgan opencv-python pillow
-        pip3 install numpy==1.24.4
-        pip3 install torch==1.13.1 torchvision==0.14.1 torchaudio==0.13.1 --index-url https://download.pytorch.org/whl/cpu
+        python3.10 -m venv .venv
+        source .venv/bin/activate
+        pip install realesrgan opencv-python pillow
+        pip install numpy==1.24.4
+        pip install torch==1.13.1 torchvision==0.14.1 torchaudio==0.13.1 --index-url https://download.pytorch.org/whl/cpu
         ```
 
-    *Note on Python Dependencies*: The application's `imageProcessor.js` will attempt to auto-install `realesrgan`, `opencv-python`, and `pillow` if it detects they are missing. However, for `torch`, `torchvision`, `torchaudio`, and `numpy`, it's best to ensure the specific versions listed above (and included in `setup.sh`) are installed for compatibility.
+*Note on Python Dependencies*: The application's `imageProcessor.js` will attempt to auto-install `realesrgan`, `opencv-python`, and `pillow` if it detects they are missing. However, for `torch`, `torchvision`, `torchaudio`, and `numpy`, it's best to ensure the specific versions listed above (and included in `setup.sh`) are installed for compatibility.
+
+*Note on Python Version*: Real-ESRGAN is currently most reliable on Python 3.10/3.11. This project standardizes on 3.10 for local testing.
 
 ## Usage
 
@@ -88,18 +105,19 @@ AI-powered document image enhancement application using Real-ESRGAN for upscalin
    - Maximum file size: 10MB
 
 4. **Enhance the image**:
+   - Choose 2x or 4x upscale (2x is faster; 4x is higher detail)
    - Click the "Enhance Image" button
-   - Wait for processing to complete (may take 1-3 minutes)
+   - Wait for processing to complete (small images can finish quickly; 1MB+ may take 10+ minutes)
    - View the side-by-side comparison
 
 5. **Download the result**:
    - Click "Download Enhanced Image" to save the improved version
-   - The enhanced image will be 4x larger with improved clarity
+   - The enhanced image will be 2x or 4x larger depending on your selection
 
 ## API Endpoints
 
 - `POST /api/upload` - Upload an image file
-- `POST /api/enhance/:fileId` - Start enhancement process
+- `POST /api/enhance/:fileId` - Start enhancement process (optional `?scale=2|4`)
 - `GET /api/status/:fileId` - Check enhancement status
 - `GET /api/image/:fileId/original` - Serve original image
 - `GET /api/image/:fileId/enhanced` - Serve enhanced image
@@ -131,14 +149,14 @@ npm run lint:fix
 
 1. **Upload**: Images are uploaded and stored temporarily with unique IDs
 2. **Processing**: Real-ESRGAN Python script is executed via subprocess
-3. **Enhancement**: The AI model upscales the image 4x while preserving text clarity
+3. **Enhancement**: The AI model upscales the image 2x or 4x while preserving text clarity
 4. **Results**: Enhanced images are served alongside originals for comparison
 5. **Cleanup**: Temporary files are managed automatically
 
 ## Model Information
 
-This application uses the **Real-ESRGAN x4plus** model, which is specifically designed for:
-- 4x upscaling of low-quality images
+This application uses the **Real-ESRGAN x2plus/x4plus** models, which are designed for:
+- 2x or 4x upscaling of low-quality images
 - Preserving text and document details
 - Reducing blur and noise
 - Enhancing overall image clarity

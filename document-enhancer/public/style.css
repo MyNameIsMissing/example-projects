@@ -154,6 +154,48 @@ main {
     text-align: center;
 }
 
+.enhance-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.option-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 16px;
+    border-radius: 12px;
+    background: rgba(102, 126, 234, 0.08);
+    border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.option-title {
+    font-weight: 600;
+    color: #444;
+}
+
+.option-choice {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: #333;
+    cursor: pointer;
+}
+
+.option-choice input {
+    accent-color: #667eea;
+}
+
+.enhance-hints {
+    max-width: 520px;
+    font-size: 0.9rem;
+    color: #555;
+}
+
 .enhance-btn {
     background: linear-gradient(135deg, #667eea, #764ba2);
     color: white;

@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
-const { v4: uuidv4 } = require('uuid');
+const { randomUUID } = require('crypto');
 const cors = require('cors');
 const imageProcessor = require('./utils/imageProcessor');
 const rateLimit = require('express-rate-limit');
@@ -37,7 +37,7 @@ const storage = multer.diskStorage({
     cb(null, path.join(__dirname, 'temp'));
   },
   filename: (req, file, cb) => {
-    const uniqueId = uuidv4();
+    const uniqueId = randomUUID();
     const safeName = path.basename(file.originalname).replace(/[^a-zA-Z0-9.-]/g, '_');
     cb(null, `${uniqueId}_${safeName}`);
   }
@@ -59,6 +59,21 @@ const upload = multer({
 
 // Store processing status
 const processingStatus = new Map();
+
+const setStatus = (fileId, status, extra = {}) => {
+  processingStatus.set(fileId, { status, ...extra });
+};
+
+const getStatusEntry = (fileId) => {
+  const entry = processingStatus.get(fileId);
+  if (!entry) {
+    return null;
+  }
+  if (typeof entry === 'string') {
+    return { status: entry };
+  }
+  return entry;
+};
 
 // Helper to validate UUIDs
 const isValidUUID = (id) => /^[0-9a-fA-F-]{36}$/.test(id);
@@ -153,7 +168,8 @@ app.post('/api/enhance/:fileId', heavyOpLimiter, async (req, res) => {
     }
     
     // Check if already processing
-    if (processingStatus.get(fileId) === 'processing') {
+    const existingStatus = getStatusEntry(fileId);
+    if (existingStatus && existingStatus.status === 'processing') {
       return res.status(409).json({ error: 'Image is already being processed' });
     }
 
@@ -168,18 +184,38 @@ app.post('/api/enhance/:fileId', heavyOpLimiter, async (req, res) => {
 
     const inputPath = path.join(tempDir, originalFile);
     const outputPath = path.join(tempDir, `${fileId}_enhanced.png`);
+    const requestedScale = Number.parseInt(req.query.scale, 10);
+    const scale = requestedScale === 2 || requestedScale === 4 ? requestedScale : 4;
 
     // Set processing status
-    processingStatus.set(fileId, 'processing');
+    setStatus(fileId, 'processing', {
+      progress: null,
+      etaSeconds: null,
+      phase: 'initializing',
+      startedAt: Date.now(),
+      updatedAt: Date.now()
+    });
 
     // Start enhancement process
-    imageProcessor.enhanceImage(inputPath, outputPath)
+    imageProcessor.enhanceImage(inputPath, outputPath, (progress) => {
+      setStatus(fileId, 'processing', { ...progress, updatedAt: Date.now() });
+    }, { scale })
       .then(() => {
-        processingStatus.set(fileId, 'completed');
+        setStatus(fileId, 'completed', {
+          progress: 1,
+          etaSeconds: 0,
+          phase: 'completed',
+          updatedAt: Date.now()
+        });
         console.log(`Enhancement completed for ${fileId}`);
       })
       .catch((error) => {
-        processingStatus.set(fileId, 'failed');
+        setStatus(fileId, 'failed', {
+          progress: null,
+          etaSeconds: null,
+          phase: 'failed',
+          updatedAt: Date.now()
+        });
         console.error(`Enhancement failed for ${fileId}:`, error);
       });
 
@@ -196,17 +232,41 @@ app.post('/api/enhance/:fileId', heavyOpLimiter, async (req, res) => {
 });
 
 // Status endpoint
-app.get('/api/status/:fileId', (req, res) => {
+app.get('/api/status/:fileId', async (req, res) => {
   const fileId = req.params.fileId;
   if (!isValidUUID(fileId)) {
     return res.status(400).json({ error: 'Invalid file ID' });
   }
 
-  const status = processingStatus.get(fileId) || 'not_found';
+  const entry = getStatusEntry(fileId);
+  let status = entry ? entry.status : 'not_found';
+  let resolvedEntry = entry;
+
+  if (status === 'processing') {
+    const enhancedPath = path.join(__dirname, 'temp', `${path.basename(fileId)}_enhanced.png`);
+    try {
+      await fs.access(enhancedPath);
+      setStatus(fileId, 'completed', {
+        progress: 1,
+        etaSeconds: 0,
+        phase: 'completed',
+        updatedAt: Date.now()
+      });
+      resolvedEntry = getStatusEntry(fileId);
+      status = 'completed';
+    } catch {
+      // Still processing
+    }
+  }
   
   res.json({ 
     fileId: fileId,
-    status: status 
+    status: status,
+    progress: resolvedEntry && Object.prototype.hasOwnProperty.call(resolvedEntry, 'progress') ? resolvedEntry.progress : null,
+    etaSeconds: resolvedEntry && Object.prototype.hasOwnProperty.call(resolvedEntry, 'etaSeconds') ? resolvedEntry.etaSeconds : null,
+    phase: resolvedEntry && Object.prototype.hasOwnProperty.call(resolvedEntry, 'phase') ? resolvedEntry.phase : null,
+    startedAt: resolvedEntry && Object.prototype.hasOwnProperty.call(resolvedEntry, 'startedAt') ? resolvedEntry.startedAt : null,
+    updatedAt: resolvedEntry && Object.prototype.hasOwnProperty.call(resolvedEntry, 'updatedAt') ? resolvedEntry.updatedAt : null
   });
 });
 

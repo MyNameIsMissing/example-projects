@@ -36,6 +36,22 @@
                 </div>
 
                 <div class="enhancement-controls">
+                    <div class="enhance-options">
+                        <div class="option-group">
+                            <div class="option-title">Upscale</div>
+                            <label class="option-choice">
+                                <input type="radio" name="scale" value="2">
+                                2x (faster)
+                            </label>
+                            <label class="option-choice">
+                                <input type="radio" name="scale" value="4" checked>
+                                4x (best quality, slower)
+                            </label>
+                        </div>
+                        <div class="enhance-hints">
+                            <p>Larger upscale values take longer. Small images (10–50 KB) finish quickly, while 1 MB+ images may take 10+ minutes.</p>
+                        </div>
+                    </div>
                     <button id="enhanceBtn" class="enhance-btn">
                         <span class="btn-text">Enhance Image</span>
                         <span class="btn-loader" style="display: none;">🔄</span>
