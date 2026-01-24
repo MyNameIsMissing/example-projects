@@ -1,0 +1,37 @@
+{
+  "name": "document-enhancer",
+  "version": "1.0.0",
+  "description": "AI-powered document image enhancement app using Real-ESRGAN",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "jest --coverage",
+    "lint": "eslint .",
+    "lint:fix": "eslint --fix ."
+  },
+  "keywords": [
+    "ai",
+    "image-enhancement",
+    "document",
+    "real-esrgan",
+    "upscaling"
+  ],
+  "author": "",
+  "license": "MIT",
+  "directories": {
+    "test": "tests"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "multer": "^2.0.2",
+    "sharp": "^0.34.5",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.2",
+    "jest": "^30.2.0",
+    "supertest": "^7.2.2"
+  }
+}

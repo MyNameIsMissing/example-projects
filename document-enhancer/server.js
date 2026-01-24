@@ -1,0 +1,340 @@
+const express = require('express');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs').promises;
+const { randomUUID } = require('crypto');
+const cors = require('cors');
+const imageProcessor = require('./utils/imageProcessor');
+const rateLimit = require('express-rate-limit');
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Rate limiting configuration
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const heavyOpLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20, // Limit each IP to 20 heavy operations per hour
+  message: 'Too many processing requests from this IP, please try again later.'
+});
+
+app.use('/api', apiLimiter);
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, 'temp'));
+  },
+  filename: (req, file, cb) => {
+    const uniqueId = randomUUID();
+    const safeName = path.basename(file.originalname).replace(/[^a-zA-Z0-9.-]/g, '_');
+    cb(null, `${uniqueId}_${safeName}`);
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'image/png' || file.mimetype === 'image/jpeg') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PNG and JPEG files are allowed'), false);
+    }
+  }
+});
+
+// Store processing status
+const processingStatus = new Map();
+
+const setStatus = (fileId, status, extra = {}) => {
+  processingStatus.set(fileId, { status, ...extra });
+};
+
+const getStatusEntry = (fileId) => {
+  const entry = processingStatus.get(fileId);
+  if (!entry) {
+    return null;
+  }
+  if (typeof entry === 'string') {
+    return { status: entry };
+  }
+  return entry;
+};
+
+// Helper to validate UUIDs
+const isValidUUID = (id) => /^[0-9a-fA-F-]{36}$/.test(id);
+
+// Routes
+app.get('/', apiLimiter, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Upload endpoint
+app.post('/api/upload', heavyOpLimiter, upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const fileId = req.file.filename.split('_')[0];
+    const filePath = req.file.path;
+
+    // Get image metadata
+    const sharp = require('sharp');
+    const metadata = await sharp(filePath).metadata();
+
+    res.json({
+      fileId: fileId,
+      originalName: req.file.originalname,
+      size: req.file.size,
+      dimensions: {
+        width: metadata.width,
+        height: metadata.height
+      },
+      uploadPath: `/api/image/${fileId}/original`
+    });
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({ error: 'Failed to upload file' });
+  }
+});
+
+// Serve original image
+app.get('/api/image/:fileId/original', async (req, res) => {
+  try {
+    const fileId = req.params.fileId;
+    if (!isValidUUID(fileId)) {
+      return res.status(400).json({ error: 'Invalid file ID' });
+    }
+
+    const tempDir = path.join(__dirname, 'temp');
+    const files = await fs.readdir(tempDir);
+    const originalFile = files.find(file => file.startsWith(fileId));
+    
+    if (!originalFile) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    const filePath = path.join(tempDir, originalFile);
+    res.sendFile(filePath);
+  } catch (error) {
+    console.error('Error serving original image:', error);
+    res.status(500).json({ error: 'Failed to serve image' });
+  }
+});
+
+// Serve enhanced image
+app.get('/api/image/:fileId/enhanced', async (req, res) => {
+  try {
+    const fileId = req.params.fileId;
+    if (!isValidUUID(fileId)) {
+      return res.status(400).json({ error: 'Invalid file ID' });
+    }
+
+    const enhancedPath = path.join(__dirname, 'temp', `${path.basename(fileId)}_enhanced.png`);
+    
+    try {
+      await fs.access(enhancedPath);
+      res.sendFile(enhancedPath);
+    } catch {
+      res.status(404).json({ error: 'Enhanced image not found' });
+    }
+  } catch (error) {
+    console.error('Error serving enhanced image:', error);
+    res.status(500).json({ error: 'Failed to serve enhanced image' });
+  }
+});
+
+// Enhancement endpoint
+app.post('/api/enhance/:fileId', heavyOpLimiter, async (req, res) => {
+  try {
+    const fileId = req.params.fileId;
+    if (!isValidUUID(fileId)) {
+      return res.status(400).json({ error: 'Invalid file ID' });
+    }
+    
+    // Check if already processing
+    const existingStatus = getStatusEntry(fileId);
+    if (existingStatus && existingStatus.status === 'processing') {
+      return res.status(409).json({ error: 'Image is already being processed' });
+    }
+
+    // Find original file
+    const tempDir = path.join(__dirname, 'temp');
+    const files = await fs.readdir(tempDir);
+    const originalFile = files.find(file => file.startsWith(fileId) && !file.includes('enhanced'));
+    
+    if (!originalFile) {
+      return res.status(404).json({ error: 'Original file not found' });
+    }
+
+    const inputPath = path.join(tempDir, originalFile);
+    const outputPath = path.join(tempDir, `${fileId}_enhanced.png`);
+    const requestedScale = Number.parseInt(req.query.scale, 10);
+    const scale = requestedScale === 2 || requestedScale === 4 ? requestedScale : 4;
+
+    // Set processing status
+    setStatus(fileId, 'processing', {
+      progress: null,
+      etaSeconds: null,
+      phase: 'initializing',
+      startedAt: Date.now(),
+      updatedAt: Date.now()
+    });
+
+    // Start enhancement process
+    imageProcessor.enhanceImage(inputPath, outputPath, (progress) => {
+      setStatus(fileId, 'processing', { ...progress, updatedAt: Date.now() });
+    }, { scale })
+      .then(() => {
+        setStatus(fileId, 'completed', {
+          progress: 1,
+          etaSeconds: 0,
+          phase: 'completed',
+          updatedAt: Date.now()
+        });
+        console.log(`Enhancement completed for ${fileId}`);
+      })
+      .catch((error) => {
+        setStatus(fileId, 'failed', {
+          progress: null,
+          etaSeconds: null,
+          phase: 'failed',
+          updatedAt: Date.now()
+        });
+        console.error(`Enhancement failed for ${fileId}:`, error);
+      });
+
+    res.json({ 
+      message: 'Enhancement started',
+      fileId: fileId,
+      status: 'processing'
+    });
+
+  } catch (error) {
+    console.error('Enhancement error:', error);
+    res.status(500).json({ error: 'Failed to start enhancement' });
+  }
+});
+
+// Status endpoint
+app.get('/api/status/:fileId', async (req, res) => {
+  const fileId = req.params.fileId;
+  if (!isValidUUID(fileId)) {
+    return res.status(400).json({ error: 'Invalid file ID' });
+  }
+
+  const entry = getStatusEntry(fileId);
+  let status = entry ? entry.status : 'not_found';
+  let resolvedEntry = entry;
+
+  if (status === 'processing') {
+    const enhancedPath = path.join(__dirname, 'temp', `${path.basename(fileId)}_enhanced.png`);
+    try {
+      await fs.access(enhancedPath);
+      setStatus(fileId, 'completed', {
+        progress: 1,
+        etaSeconds: 0,
+        phase: 'completed',
+        updatedAt: Date.now()
+      });
+      resolvedEntry = getStatusEntry(fileId);
+      status = 'completed';
+    } catch {
+      // Still processing
+    }
+  }
+  
+  res.json({ 
+    fileId: fileId,
+    status: status,
+    progress: resolvedEntry && Object.prototype.hasOwnProperty.call(resolvedEntry, 'progress') ? resolvedEntry.progress : null,
+    etaSeconds: resolvedEntry && Object.prototype.hasOwnProperty.call(resolvedEntry, 'etaSeconds') ? resolvedEntry.etaSeconds : null,
+    phase: resolvedEntry && Object.prototype.hasOwnProperty.call(resolvedEntry, 'phase') ? resolvedEntry.phase : null,
+    startedAt: resolvedEntry && Object.prototype.hasOwnProperty.call(resolvedEntry, 'startedAt') ? resolvedEntry.startedAt : null,
+    updatedAt: resolvedEntry && Object.prototype.hasOwnProperty.call(resolvedEntry, 'updatedAt') ? resolvedEntry.updatedAt : null
+  });
+});
+
+// Download endpoint
+app.get('/api/download/:fileId', heavyOpLimiter, async (req, res) => {
+  try {
+    const fileId = req.params.fileId;
+    if (!isValidUUID(fileId)) {
+      return res.status(400).json({ error: 'Invalid file ID' });
+    }
+
+    const enhancedPath = path.join(__dirname, 'temp', `${path.basename(fileId)}_enhanced.png`);
+    
+    try {
+      await fs.access(enhancedPath);
+      res.download(enhancedPath, `enhanced_document_${fileId}.png`);
+    } catch {
+      res.status(404).json({ error: 'Enhanced image not available for download' });
+    }
+  } catch (error) {
+    console.error('Download error:', error);
+    res.status(500).json({ error: 'Failed to download file' });
+  }
+});
+
+// Cleanup endpoint (optional - for removing old files)
+app.delete('/api/cleanup/:fileId', heavyOpLimiter, async (req, res) => {
+  try {
+    const fileId = req.params.fileId;
+    if (!isValidUUID(fileId)) {
+      return res.status(400).json({ error: 'Invalid file ID' });
+    }
+
+    const tempDir = path.join(__dirname, 'temp');
+    const files = await fs.readdir(tempDir);
+    
+    const filesToDelete = files.filter(file => file.startsWith(fileId));
+    
+    for (const file of filesToDelete) {
+      await fs.unlink(path.join(tempDir, file));
+    }
+    
+    processingStatus.delete(fileId);
+    
+    res.json({ message: 'Files cleaned up successfully' });
+  } catch (error) {
+    console.error('Cleanup error:', error);
+    res.status(500).json({ error: 'Failed to cleanup files' });
+  }
+});
+
+// Error handling middleware
+app.use((error, req, res, next) => {
+  if (error instanceof multer.MulterError) {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File too large. Maximum size is 10MB.' });
+    }
+  }
+  
+  console.error('Unhandled error:', error);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+// Start server
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Document Enhancer server running on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
