@@ -6,9 +6,10 @@ This repository contains various projects and examples used for AI experimentati
 
 - **document-enhancer/**: An AI-powered document image enhancement application using Real-ESRGAN for upscaling and improving the readability of blurry document images.
 - **goapp/**: A Go application that fetches and displays stock data using the Alpha Vantage API.
-- **javascriptapp/**: A simple JavaScript application with tests and coverage reports.
+- **javascriptapp/**: A simple JavaScript application that displays current weather conditions for any city using the OpenWeather API, with tests and coverage reports.
 - **mermaid_diagrams/**: Examples of using Mermaid to create diagrams for various architectures and workflows.
 - **.git-hooks/**: Git hooks for code quality and testing. See [Git Hooks](#git-hooks) section below.
+- **.github/**: GitHub workflows and PR template.  
 
 ## Git Hooks
 
