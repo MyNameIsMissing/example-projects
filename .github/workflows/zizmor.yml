@@ -1,0 +1,30 @@
+name: Zizmor Security Scan
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  zizmor-scan:
+    runs-on: ubuntu-latest
+    name: Zizmor GitHub Actions Security Scan
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run zizmor security scan
+        run: uvx zizmor --persona=pedantic --min-severity=medium --min-confidence=medium --format=github .github/workflows/
+        continue-on-error: true
