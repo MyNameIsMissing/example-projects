@@ -25,16 +25,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Rust and zizmor
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-          source ~/.cargo/env
-          cargo install zizmor
-
       - name: Run zizmor security scan
-        run: |
-          source ~/.cargo/env
-          zizmor --persona=pedantic --min-severity=medium --min-confidence=medium --format=sarif .github/workflows/ > zizmor.sarif
+        run: uvx zizmor --persona=pedantic --min-severity=medium --min-confidence=medium --format=sarif .github/workflows/ > zizmor.sarif
         continue-on-error: true
 
       - name: Upload SARIF results to GitHub
