@@ -26,12 +26,5 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run zizmor security scan
-        run: uvx zizmor --persona=pedantic --min-severity=medium --min-confidence=medium --format=sarif .github/workflows/ > zizmor.sarif
+        run: uvx zizmor --persona=pedantic --min-severity=medium --min-confidence=medium --format=github .github/workflows/
         continue-on-error: true
-
-      - name: Upload SARIF results to GitHub
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: zizmor.sarif
-          category: zizmor
-        if: always()
