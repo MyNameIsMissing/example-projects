@@ -1,29 +1,29 @@
 # Security Response Generator
 
-A local, offline-capable CLI that drafts security control responses (e.g.
+A local, offline CLI that drafts security control responses (e.g.
 NIST 800-53 controls like "SI-5") for a compliance assessor to review, using
 retrieval-augmented generation (RAG) grounded in three tiers of source
 material. Output can be Markdown or plain ASCII text, depending on what the
 target system of record accepts:
 
-1. **NIST 800-53 rev5 baseline** — the canonical control catalog, universal
-   across engagements.
+1. **NIST 800-53 rev5 baseline** — the most typical control catalog.  If your customer uses something different like PCI-DSS or HIPAA, replace or augment  this doc with the appropriate catalog document.
 2. **Customer/state-specific standards** — e.g. a state's published
    per-control guidance with state-specific parameter values. When present
    for a control, this is treated as **authoritative** over generic NIST
-   language.
+   language.  Its content must match the control catalog IDs.  
 3. **Private system context** — non-public specifics about the system being
-   assessed, supplied via a standing document plus freeform notes per query.
+   assessed, supplied via a standing document [../private_context/yourfile.md] plus freeform notes per query.
 
 Everything runs locally: embeddings and generation both go through
 [Ollama](https://ollama.com), and retrieval uses an embedded
 [ChromaDB](https://www.trychroma.com) instance (a folder on disk, no server
-process). Nothing is sent to a third-party API.
+process). Nothing is sent to a third-party.
 
 ## Features
 
 - Three-tier retrieval that respects customer/state standards as
-  authoritative when they exist, and explicitly flags when they don't
+  authoritative when they exist, and explicitly flags when they don't.
+- U.S. based open-source model from Google
 - Refuses to answer (rather than hallucinate) if a control ID has no match
   in the NIST baseline
 - Interactive follow-up questions when a material part of the control isn't
@@ -49,11 +49,12 @@ process). Nothing is sent to a third-party API.
 
 ## Prerequisites
 
+- Permission from your customer to use this tool.  Different customers have very different AI permissions models.  
 - Python 3.11+
 - [Ollama](https://ollama.com/download) installed, with the daemon running
 - A modest amount of VRAM or unified memory for `gemma4:e4b` (~9.6GB
   download). Public estimates for its runtime VRAM footprint vary quite a
-  bit by source and quantization (roughly 3-8GB).
+  bit but tend to agree on roughly 3-8GB required.
 
 ## Installation
 
@@ -88,7 +89,7 @@ that session.
 
 1. **Add source material**:
    - Drop the NIST SP 800-53 rev5 catalog (PDF, Markdown, or text) into
-     `knowledge_base/`.
+     `knowledge_base/`. (it's already included, but you could replace it if a newer come comes out)
    - Drop the current engagement's customer/state-specific standards into
      `customer_standards/`.
    - Drop non-public system details into `private_context/`.
@@ -97,37 +98,30 @@ that session.
    ```bash
    srg ingest
    ```
-   **This may take some time, several minutes on the initial run.**
+   **This may take some time, several minutes on the initial run.**  
    Re-run this any time files in those folders change — unchanged files are
    skipped automatically. Use `--source knowledge_base|customer_standards|private_context`
    to ingest just one tier, or `--rebuild` to wipe and re-ingest everything
-   (do this when switching to a new customer engagement). Large files (e.g.
-   the full NIST 800-53 catalog, which can chunk into hundreds of pieces)
-   show a progress bar on stderr as embedding batches complete, so a long
-   ingest doesn't look stalled.
+   (do this when switching to a new customer engagement).  
+   Large files show a progress bar on stderr as embedding batches complete, so a long ingest doesn't look stalled.
 
 3. **Generate a response**:
    ```bash
    srg generate SI-5 --context "our environment uses a SaaS SIEM for continuous monitoring"
    ```
-   **This may take some time, ESPECIALLY on the initial request.**
+   **This may take some time, ESPECIALLY on the initial request.**  
    Prints Markdown to stdout by default. Add `-o response.md` to also write
    it to a file (or to a directory, in which case a filename like
-   `SI-5_20260715.md` is generated). A spinner shows on stderr while waiting
-   for the model (generation can take a couple of minutes depending on your
-   hardware) so a long wait doesn't look hung — it doesn't pollute stdout,
-   so piping/redirecting output still works cleanly.
+   `SI-5_20260715.md` is generated).  
+   A spinner shows on stderr while waiting for the model (generation can take a couple of minutes depending on your hardware) so a long wait doesn't look hung — it doesn't pollute stdout, so piping/redirecting output still works cleanly.
 
-   For evidence/GRC systems that only accept raw text with no formatting,
+   For evidence/GRC systems that only accept raw text with no formatting (maybe Archer or Xacta),
    add `--format text`:
    ```bash
    srg generate SI-5 --format text --context "..." -o response.txt
    ```
    This produces plain ASCII output — no Markdown syntax, no smart quotes,
-   em-dashes, bullets, or other non-ASCII characters. The model is
-   instructed to write plain text directly, and the output is additionally
-   normalized in code afterward (see `generation/formatting.py`) so
-   compliance doesn't depend on the model following instructions perfectly.
+   em-dashes, bullets, or other non-ASCII characters.  
    A directory target with `--format text` gets a `.txt` filename instead
    of `.md`.
 
@@ -152,12 +146,9 @@ re-run the command. This can happen up to `SRG_MAX_FOLLOWUP_TURNS` times
 a best-effort response anyway: it opens with a brief note that some
 information wasn't available, and inserts `[PLACEHOLDER: ...]` markers in
 place of anything it couldn't address confidently, so you can fill those in
-by hand before submitting to the assessor — the tool always finishes with
-*something* rather than stalling indefinitely.
+by hand before submitting to the assessor.  
 
-```bash
-SRG_MAX_FOLLOWUP_TURNS=0 srg generate SI-5 --context "..."   # never ask, always best-effort
-```
+The tool is biased to generate *something* rather than looping/questioning indefinitely.
 
 ## Switching customer engagements
 
@@ -268,22 +259,6 @@ security-response-generator/
   ```bash
   SRG_EMBED_BATCH_SIZE=8 srg ingest
   ```
-- **`srg generate` output ignores your context or invents details**: check
-  the `ollama serve` output/log for a `truncating input prompt` warning. By
-  default Ollama caps the context window quite low (~2048 tokens) unless
-  told otherwise, and this tool's assembled prompts (retrieved chunks from
-  up to three tiers, plus instructions) can easily exceed that — Ollama
-  silently drops the middle of the prompt to fit, which can cut out exactly
-  the retrieved grounding material a response should be based on.
-  `chat_messages()` now explicitly requests a larger context window via
-  `SRG_NUM_CTX` (default 16384) to avoid this; if you still see truncation
-  warnings (e.g. because you raised the top-k settings above their
-  defaults), raise it further:
-  ```bash
-  SRG_NUM_CTX=32768 srg generate SI-5 --context "..."
-  ```
-  A larger context window increases memory usage, so balance against your
-  available VRAM/unified memory.
 
 ## Security & Privacy
 
@@ -291,7 +266,7 @@ security-response-generator/
   contents never get committed, even though the underlying customer
   documents may themselves be public.
 - All embedding and generation happens through the locally running Ollama
-  daemon. No document content is sent to a third-party API.
+  daemon. No document or promt content is sent outside the local machine.
 
 ## Manual verification
 
