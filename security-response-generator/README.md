@@ -6,13 +6,13 @@ retrieval-augmented generation (RAG) grounded in three tiers of source
 material. Output can be Markdown or plain ASCII text, depending on what the
 target system of record accepts:
 
-1. **NIST 800-53 rev5 baseline** — the most typical control catalog.  If your customer uses something different like PCI-DSS or HIPAA, replace or augment  this doc with the appropriate catalog document.
+1. **NIST 800-53 rev5 baseline** — the most typical control catalog.  If your customer uses something different like PCI-DSS, HIPAA, or ISO/IEC 27001:2022 you'll need to refactor a number of things in this tool.
 2. **Customer/state-specific standards** — e.g. a state's published
    per-control guidance with state-specific parameter values. When present
    for a control, this is treated as **authoritative** over generic NIST
    language.  Its content must match the control catalog IDs.  
 3. **Private system context** — non-public specifics about the system being
-   assessed, supplied via a standing document [../private_context/yourfile.md] plus freeform notes per query.
+   assessed, supplied via a standing document `[../private_context/yourfile.md]` plus freeform context notes per query.
 
 Everything runs locally: embeddings and generation both go through
 [Ollama](https://ollama.com), and retrieval uses an embedded
@@ -26,6 +26,7 @@ process). Nothing is sent to a third-party.
 - U.S. based open-source model from Google
 - Refuses to answer (rather than hallucinate) if a control ID has no match
   in the NIST baseline
+    - This is a dedicated **tool**, NOT a general chatbot
 - Interactive follow-up questions when a material part of the control isn't
   covered by the supplied context, up to a configurable round limit, with a
   best-effort placeholder-annotated response if the model still isn't done
@@ -107,7 +108,7 @@ that session.
 
 3. **Generate a response**:
    ```bash
-   srg generate SI-5 --context "our environment uses a SaaS SIEM for continuous monitoring"
+   srg generate "SI-5" --context "our environment uses a SaaS SIEM for continuous monitoring"
    ```
    **This may take some time, ESPECIALLY on the initial request.**  
    Prints Markdown to stdout by default. Add `-o response.md` to also write
@@ -118,7 +119,7 @@ that session.
    For evidence/GRC systems that only accept raw text with no formatting (maybe Archer or Xacta),
    add `--format text`:
    ```bash
-   srg generate SI-5 --format text --context "..." -o response.txt
+   srg generate "SI-5" --format text --context "..." -o response.txt
    ```
    This produces plain ASCII output — no Markdown syntax, no smart quotes,
    em-dashes, bullets, or other non-ASCII characters.  
@@ -159,6 +160,11 @@ When you move to a different customer:
 # replace the contents of customer_standards/ with the new customer's docs
 srg ingest --rebuild
 ```
+
+`example_files/` has starter material per jurisdiction (`Federal/`, `VA/`,
+`PA/`, `CA/`, `MD/`, `HI/`) to make this faster — copy what's relevant into
+`customer_standards/` before running `--rebuild`. See
+`example_files/README.md` for details.
 
 ## Development
 
@@ -223,6 +229,8 @@ security-response-generator/
 ├── knowledge_base/                  # committed: NIST 800-53 rev5, public refs
 ├── customer_standards/              # gitignored: current engagement's standards
 ├── private_context/                 # gitignored: non-public system details
+├── example_files/                   # committed: per-jurisdiction starter material
+│   └── Federal/ VA/ PA/ CA/ MD/ HI/ #   (copy into customer_standards/ per engagement)
 ├── src/security_response_generator/
 │   ├── cli.py                       # `srg ingest` / `srg generate`
 │   ├── config.py                    # models, paths, chunking, top-k (env-overridable)
