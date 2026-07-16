@@ -8,6 +8,7 @@ This repository contains various projects and examples used for AI experimentati
 - **goapp/**: A Go application that fetches and displays stock data using the Alpha Vantage API.
 - **javascriptapp/**: A simple JavaScript application that displays current weather conditions for any city using the OpenWeather API, with tests and coverage reports.
 - **mermaid_diagrams/**: Examples of using Mermaid to create diagrams for various architectures and workflows.
+- **security-response-generator/**: A local, offline CLI that generates Markdown-formatted security control responses (e.g. NIST 800-53) using local RAG over a NIST baseline, engagement-specific customer/state standards, and a private, gitignored system-context document, powered by Ollama (Gemma 4 E4B) and ChromaDB.
 - **.git-hooks/**: Git hooks for code quality and testing. See [Git Hooks](#git-hooks) section below.
 - **.github/**: GitHub workflows and PR template.  
 
