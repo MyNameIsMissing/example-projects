@@ -1,0 +1,29 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+.python-version
+
+# Chroma persistence + ingestion manifest (local, regenerable via `srg ingest`)
+chroma_db/
+
+# Customer-specific and system-specific material: never committed, even though
+# the underlying source documents may themselves be public
+customer_standards/*
+!customer_standards/README.md
+!customer_standards/.gitkeep
+
+private_context/*
+!private_context/README.md
+!private_context/.gitkeep
+
+# Env / secrets
+.env
+.env.local
+
+# OS cruft
+.DS_Store

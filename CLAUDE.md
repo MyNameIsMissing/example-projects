@@ -57,6 +57,32 @@ cd document-enhancer
 
 Key architecture: `server.js` exposes REST endpoints (`/api/upload`, `/api/enhance/:fileId`, `/api/status/:fileId`, etc.); `utils/imageProcessor.js` spawns the Python Real-ESRGAN subprocess. The ~67MB model downloads automatically on first enhancement.
 
+### `security-response-generator/` — Local RAG Security Control Response Generator
+Python CLI that drafts Markdown security control responses (e.g. NIST 800-53 "SI-5") via local RAG over three tiers: the NIST 800-53 rev5 baseline (`knowledge_base/`, committed), engagement-specific customer/state standards (`customer_standards/`, gitignored), and non-public system details (`private_context/`, gitignored). If a material gap remains, it asks a clarifying question interactively (up to `SRG_MAX_FOLLOWUP_TURNS`, default 2) rather than guessing, falling back to a best-effort response with `[PLACEHOLDER: ...]` markers if the gap is never filled. Runs entirely locally via Ollama (Gemma 4 E4B generation, EmbeddingGemma embeddings) and an embedded ChromaDB store.
+
+**First-time setup:**
+```bash
+cd security-response-generator
+./setup.sh   # creates venv, installs deps, pulls gemma4:e4b + embeddinggemma via Ollama
+```
+
+**Ingest documents:**
+```bash
+srg ingest                    # all three source tiers, incremental
+srg ingest --rebuild          # wipe and re-ingest, e.g. when switching customer engagements
+```
+
+**Generate a response:**
+```bash
+srg generate SI-5 --context "our environment uses a SaaS SIEM for continuous monitoring"
+srg generate SI-5 --format text -o response.txt   # plain ASCII for GRC systems that reject Markdown
+```
+
+**Test:** `pytest`
+**Lint:** `ruff check .` / `ruff format .`
+
+Key architecture: `src/security_response_generator/ingest/` handles loading (PDF/MD/TXT), chunking, and incremental Chroma upserts; `generation/retrieval.py` and `generation/prompt.py` merge per-tier retrieval results (customer standards treated as authoritative) into a prompt, format-aware via `--format markdown|text`; `generation/formatting.py` normalizes `text`-format output to plain ASCII in code (not just via prompt instruction); `llm/ollama_client.py` wraps the local Ollama calls. Refuses to answer if the control ID has no match in the NIST baseline rather than letting the model guess.
+
 ### `mermaid_diagrams/`
 Static `.mmd` files — Mermaid diagram source for various architecture and workflow diagrams.
 
