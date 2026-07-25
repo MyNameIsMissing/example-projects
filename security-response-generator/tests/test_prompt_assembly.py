@@ -1,3 +1,5 @@
+import json
+
 from security_response_generator.generation.prompt import (
     BASELINE_LABEL,
     CUSTOMER_LABEL,
@@ -7,7 +9,7 @@ from security_response_generator.generation.prompt import (
     TEXT_FORMAT_INSTRUCTION,
     OutputFormat,
     assemble_prompt,
-    extract_followup_question,
+    parse_model_reply,
 )
 from security_response_generator.generation.retrieval import RetrievedChunk
 
@@ -117,21 +119,37 @@ def test_followup_instruction_present_regardless_of_format():
     assert FOLLOWUP_INSTRUCTION in text_prompt.user
 
 
-def test_extract_followup_question_parses_marker():
-    assert extract_followup_question("NEEDS_INFO: what SIEM do you use?") == (
-        "what SIEM do you use?"
+def test_parse_model_reply_recognizes_followup_request():
+    reply = parse_model_reply(
+        '{"needs_info": true, "question": "what SIEM do you use?", "response": null}'
     )
 
+    assert reply.needs_info is True
+    assert reply.question == "what SIEM do you use?"
+    assert reply.response is None
 
-def test_extract_followup_question_strips_surrounding_whitespace():
-    assert extract_followup_question("  \nNEEDS_INFO:   what SIEM do you use?  \n") == (
-        "what SIEM do you use?"
+
+def test_parse_model_reply_recognizes_final_answer():
+    raw = json.dumps(
+        {"needs_info": False, "question": None, "response": "# SI-5\n\nThis control is met by..."}
     )
+    reply = parse_model_reply(raw)
+
+    assert reply.needs_info is False
+    assert reply.question is None
+    assert reply.response == "# SI-5\n\nThis control is met by..."
 
 
-def test_extract_followup_question_returns_none_for_final_answer():
-    assert extract_followup_question("# SI-5\n\nThis control is met by...") is None
+def test_parse_model_reply_falls_back_to_raw_text_on_invalid_json():
+    reply = parse_model_reply("not valid json at all")
+
+    assert reply.needs_info is False
+    assert reply.question is None
+    assert reply.response == "not valid json at all"
 
 
-def test_extract_followup_question_requires_marker_at_start():
-    assert extract_followup_question("The response mentions NEEDS_INFO: elsewhere") is None
+def test_parse_model_reply_falls_back_to_raw_text_when_needs_info_missing():
+    reply = parse_model_reply('{"question": null, "response": "some text"}')
+
+    assert reply.needs_info is False
+    assert reply.response == '{"question": null, "response": "some text"}'

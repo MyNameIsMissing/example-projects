@@ -6,26 +6,23 @@
 # current shell instead of a throwaway subshell:
 #   source start.sh
 
-if (return 0 2>/dev/null); then
-  sourced=1
-else
-  sourced=0
-  echo "Note: run this as 'source start.sh' (or '. start.sh'), not './start.sh' --"
-  echo "otherwise the virtual environment activated below won't stick around"
-  echo "in your shell once this script finishes."
-  echo ""
+if ! (return 0 2>/dev/null); then
+  echo "Run this as 'source start.sh' (or '. start.sh'), not './start.sh' --"
+  echo "otherwise the virtual environment this activates won't stick around"
+  echo "in your shell once the script exits." >&2
+  exit 1
 fi
 
-cd "$(dirname "${BASH_SOURCE[0]:-$0}")" || { return 1 2>/dev/null || exit 1; }
+cd "$(dirname "${BASH_SOURCE[0]:-$0}")" || { return 1; }
 
 if [ ! -f .venv/bin/activate ]; then
   echo "No .venv found. Run ./setup.sh first."
-  return 1 2>/dev/null || exit 1
+  return 1
 fi
 
 if ! command -v ollama >/dev/null 2>&1; then
   echo "Ollama isn't installed. Install it from https://ollama.com/download, then run ./setup.sh."
-  return 1 2>/dev/null || exit 1
+  return 1
 fi
 
 source .venv/bin/activate
@@ -51,13 +48,13 @@ else
     echo "Ollama daemon is up."
   else
     echo "Ollama didn't come up after 15s -- check /tmp/srg-ollama-serve.log"
-    return 1 2>/dev/null || exit 1
+    return 1
   fi
 fi
 
 missing_models=""
 installed_models="$(ollama list 2>/dev/null | awk 'NR>1 {print $1}')"
-for m in gemma4:e4b embeddinggemma; do
+for m in "${SRG_GEN_MODEL:-phi4-mini}" "${SRG_EMBED_MODEL:-embeddinggemma}"; do
   if ! grep -qxE "${m}(:latest)?" <<<"$installed_models"; then
     missing_models="$missing_models $m"
   fi
@@ -69,4 +66,4 @@ fi
 
 echo ""
 echo "Ready. Try:"
-echo "  srg generate AC-2 --context \"...\""
+echo " srg generate \"AC-2\" --context \"...\""

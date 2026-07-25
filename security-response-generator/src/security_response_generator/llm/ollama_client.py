@@ -37,10 +37,11 @@ def embed_query(text: str) -> list[float]:
     return embed_texts([text])[0]
 
 
-def chat_messages(messages: list[dict]) -> str:
+def chat_messages(messages: list[dict], response_format: dict | None = None) -> str:
     response = ollama.chat(
         model=GENERATION_MODEL,
         messages=messages,
         options={"num_ctx": NUM_CTX},
+        format=response_format,
     )
     return response["message"]["content"]

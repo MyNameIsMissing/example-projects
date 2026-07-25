@@ -1,3 +1,5 @@
+import json
+
 from typer.testing import CliRunner
 
 from security_response_generator import cli
@@ -9,6 +11,14 @@ from security_response_generator.generation.retrieval import RetrievalResult, Re
 from security_response_generator.ingest.chunking import Chunk
 
 runner = CliRunner()
+
+
+def _final_reply(text: str) -> str:
+    return json.dumps({"needs_info": False, "question": None, "response": text})
+
+
+def _followup_reply(question: str) -> str:
+    return json.dumps({"needs_info": True, "question": question, "response": None})
 
 
 def _baseline_chunk(chunk_id: str = "doc.md::0") -> RetrievedChunk:
@@ -25,14 +35,18 @@ def _patch_common(
         "retrieve_for_control",
         lambda control_id, context, collections: retrieval_result,
     )
-    monkeypatch.setattr(cli, "chat_messages", lambda messages: chat_return)
+    monkeypatch.setattr(cli, "chat_messages", lambda messages, response_format=None: chat_return)
 
 
 def test_generate_refuses_when_no_baseline_match(monkeypatch):
-    result_obj = RetrievalResult(customer_chunks=[], baseline_chunks=[], private_chunks=[])
+    result_obj = RetrievalResult(
+        customer_chunks=[], baseline_chunks=[], private_chunks=[], baseline_exact_match=False
+    )
     _patch_common(monkeypatch, result_obj)
     chat_called = {"value": False}
-    monkeypatch.setattr(cli, "chat_messages", lambda *a: chat_called.__setitem__("value", True))
+    monkeypatch.setattr(
+        cli, "chat_messages", lambda *a, **kw: chat_called.__setitem__("value", True)
+    )
 
     result = runner.invoke(cli.app, ["generate", "ZZ-99"])
 
@@ -41,9 +55,35 @@ def test_generate_refuses_when_no_baseline_match(monkeypatch):
     assert chat_called["value"] is False
 
 
+def test_generate_refuses_for_fabricated_control_id_despite_semantic_hits(monkeypatch):
+    # A fabricated ID (e.g. "IL-27") can still pull back semantically-nearest baseline
+    # chunks even though it doesn't exist -- refusal must key off baseline_exact_match,
+    # not baseline_chunks being non-empty.
+    result_obj = RetrievalResult(
+        customer_chunks=[],
+        baseline_chunks=[_baseline_chunk()],
+        private_chunks=[],
+        baseline_exact_match=False,
+    )
+    _patch_common(monkeypatch, result_obj)
+    chat_called = {"value": False}
+    monkeypatch.setattr(
+        cli, "chat_messages", lambda *a, **kw: chat_called.__setitem__("value", True)
+    )
+
+    result = runner.invoke(cli.app, ["generate", "IL-27"])
+
+    assert result.exit_code == 1
+    assert "No matching NIST baseline content found" in result.output
+    assert chat_called["value"] is False
+
+
 def test_generate_prints_response_and_writes_output_file(monkeypatch, tmp_path):
     result_obj = RetrievalResult(
-        customer_chunks=[], baseline_chunks=[_baseline_chunk()], private_chunks=[]
+        customer_chunks=[],
+        baseline_chunks=[_baseline_chunk()],
+        private_chunks=[],
+        baseline_exact_match=True,
     )
     _patch_common(monkeypatch, result_obj, chat_return="# SI-5\nGenerated response")
     output_file = tmp_path / "response.md"
@@ -59,7 +99,10 @@ def test_generate_prints_response_and_writes_output_file(monkeypatch, tmp_path):
 
 def test_generate_without_output_flag_does_not_require_file(monkeypatch):
     result_obj = RetrievalResult(
-        customer_chunks=[], baseline_chunks=[_baseline_chunk()], private_chunks=[]
+        customer_chunks=[],
+        baseline_chunks=[_baseline_chunk()],
+        private_chunks=[],
+        baseline_exact_match=True,
     )
     _patch_common(monkeypatch, result_obj, chat_return="response text")
 
@@ -71,7 +114,10 @@ def test_generate_without_output_flag_does_not_require_file(monkeypatch):
 
 def test_generate_text_format_normalizes_output(monkeypatch):
     result_obj = RetrievalResult(
-        customer_chunks=[], baseline_chunks=[_baseline_chunk()], private_chunks=[]
+        customer_chunks=[],
+        baseline_chunks=[_baseline_chunk()],
+        private_chunks=[],
+        baseline_exact_match=True,
     )
     _patch_common(monkeypatch, result_obj, chat_return="## SI-5\n\n“Quoted” response — done.")
 
@@ -86,7 +132,10 @@ def test_generate_text_format_normalizes_output(monkeypatch):
 
 def test_generate_markdown_format_is_default_and_unmodified(monkeypatch):
     result_obj = RetrievalResult(
-        customer_chunks=[], baseline_chunks=[_baseline_chunk()], private_chunks=[]
+        customer_chunks=[],
+        baseline_chunks=[_baseline_chunk()],
+        private_chunks=[],
+        baseline_exact_match=True,
     )
     _patch_common(monkeypatch, result_obj, chat_return="## SI-5\n\n“Quoted” response.")
 
@@ -99,7 +148,10 @@ def test_generate_markdown_format_is_default_and_unmodified(monkeypatch):
 
 def test_generate_text_format_default_output_filename_uses_txt_extension(monkeypatch, tmp_path):
     result_obj = RetrievalResult(
-        customer_chunks=[], baseline_chunks=[_baseline_chunk()], private_chunks=[]
+        customer_chunks=[],
+        baseline_chunks=[_baseline_chunk()],
+        private_chunks=[],
+        baseline_exact_match=True,
     )
     _patch_common(monkeypatch, result_obj, chat_return="response text")
 
@@ -112,7 +164,10 @@ def test_generate_text_format_default_output_filename_uses_txt_extension(monkeyp
 
 def test_generate_markdown_format_default_output_filename_uses_md_extension(monkeypatch, tmp_path):
     result_obj = RetrievalResult(
-        customer_chunks=[], baseline_chunks=[_baseline_chunk()], private_chunks=[]
+        customer_chunks=[],
+        baseline_chunks=[_baseline_chunk()],
+        private_chunks=[],
+        baseline_exact_match=True,
     )
     _patch_common(monkeypatch, result_obj, chat_return="response text")
 
@@ -130,9 +185,9 @@ def _prompt() -> AssembledPrompt:
 def test_run_conversation_returns_immediately_when_no_followup_needed(monkeypatch):
     calls = []
 
-    def fake_chat_messages(messages):
+    def fake_chat_messages(messages, response_format=None):
         calls.append(list(messages))
-        return "# SI-5\n\nFinal response."
+        return _final_reply("# SI-5\n\nFinal response.")
 
     monkeypatch.setattr(cli, "chat_messages", fake_chat_messages)
 
@@ -143,15 +198,16 @@ def test_run_conversation_returns_immediately_when_no_followup_needed(monkeypatc
 
 
 def test_run_conversation_asks_once_then_returns_final_answer(monkeypatch, tmp_path):
+    first_reply = _followup_reply("what SIEM do you use?")
     replies = iter(
         [
-            "NEEDS_INFO: what SIEM do you use?",
-            "# SI-5\n\nFinal response using Acme Sentinel.",
+            first_reply,
+            _final_reply("# SI-5\n\nFinal response using Acme Sentinel."),
         ]
     )
     calls = []
 
-    def fake_chat_messages(messages):
+    def fake_chat_messages(messages, response_format=None):
         calls.append(list(messages))
         return next(replies)
 
@@ -163,10 +219,7 @@ def test_run_conversation_asks_once_then_returns_final_answer(monkeypatch, tmp_p
     assert result == "# SI-5\n\nFinal response using Acme Sentinel."
     assert len(calls) == 2
     # second call's message history includes the question and the analyst's answer
-    assert calls[1][-2] == {
-        "role": "assistant",
-        "content": "NEEDS_INFO: what SIEM do you use?",
-    }
+    assert calls[1][-2] == {"role": "assistant", "content": first_reply}
     assert calls[1][-1] == {"role": "user", "content": "Acme Sentinel"}
 
 
@@ -175,16 +228,16 @@ def test_run_conversation_forces_completion_when_budget_exhausted(monkeypatch):
 
     replies = iter(
         [
-            "NEEDS_INFO: what SIEM do you use?",
-            "NEEDS_INFO: how often is it reviewed?",
-            "NEEDS_INFO: even more detail please",
-            "# SI-5\n\nBest-effort response. [PLACEHOLDER: need details on X]",
+            _followup_reply("what SIEM do you use?"),
+            _followup_reply("how often is it reviewed?"),
+            _followup_reply("even more detail please"),
+            _final_reply("# SI-5\n\nBest-effort response. [PLACEHOLDER: need details on X]"),
         ]
     )
     chat_call_count = {"value": 0}
     prompt_call_count = {"value": 0}
 
-    def fake_chat_messages(messages):
+    def fake_chat_messages(messages, response_format=None):
         chat_call_count["value"] += 1
         return next(replies)
 
@@ -208,13 +261,13 @@ def test_run_conversation_forced_completion_message_included_in_final_call(monke
     monkeypatch.setattr(cli.config, "MAX_FOLLOWUP_TURNS", 0)
     replies = iter(
         [
-            "NEEDS_INFO: what SIEM do you use?",
-            "# SI-5\n\nBest-effort response with placeholder.",
+            _followup_reply("what SIEM do you use?"),
+            _final_reply("# SI-5\n\nBest-effort response with placeholder."),
         ]
     )
     calls = []
 
-    def fake_chat_messages(messages):
+    def fake_chat_messages(messages, response_format=None):
         calls.append(list(messages))
         return next(replies)
 

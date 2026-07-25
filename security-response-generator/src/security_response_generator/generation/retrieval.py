@@ -18,10 +18,11 @@ class RetrievalResult:
     customer_chunks: list[RetrievedChunk]
     baseline_chunks: list[RetrievedChunk]
     private_chunks: list[RetrievedChunk]
+    baseline_exact_match: bool
 
     @property
     def has_baseline_match(self) -> bool:
-        return bool(self.baseline_chunks)
+        return self.baseline_exact_match
 
     @property
     def has_customer_match(self) -> bool:
@@ -61,12 +62,22 @@ def merge_results(
 
 def _query_collection(
     collection, control_id: str, query_embedding, top_k: int
-) -> list[RetrievedChunk]:
+) -> tuple[list[RetrievedChunk], bool]:
+    """Query one collection, returning the merged chunks plus whether the exact-substring
+    pass found anything.
+
+    The semantic pass has no similarity threshold -- Chroma always returns its `top_k`
+    nearest vectors, so it's non-empty for virtually any query regardless of relevance.
+    Callers that need to know whether the control ID genuinely exists (not just that
+    *some* semantically-nearby chunk exists) should use the second return value, not
+    the presence of merged chunks.
+    """
     metadata_pass = _safe_query(
         collection, query_embedding, top_k, where_document={"$contains": control_id}
     )
     semantic_pass = _safe_query(collection, query_embedding, top_k)
-    return merge_results(metadata_pass, semantic_pass, top_k)
+    merged = merge_results(metadata_pass, semantic_pass, top_k)
+    return merged, bool(metadata_pass)
 
 
 def _safe_query(
@@ -86,19 +97,19 @@ def retrieve_for_control(control_id: str, context_notes: str, collections: dict)
     query_text = f"{control_id} {context_notes}".strip()
     query_embedding = embed_query(query_text)
 
-    customer_chunks = _query_collection(
+    customer_chunks, _ = _query_collection(
         collections[config.COLLECTION_CUSTOMER_STANDARDS],
         control_id,
         query_embedding,
         config.TOP_K_CUSTOMER_STANDARDS,
     )
-    baseline_chunks = _query_collection(
+    baseline_chunks, baseline_exact_match = _query_collection(
         collections[config.COLLECTION_KNOWLEDGE_BASE],
         control_id,
         query_embedding,
         config.TOP_K_KNOWLEDGE_BASE,
     )
-    private_chunks = _query_collection(
+    private_chunks, _ = _query_collection(
         collections[config.COLLECTION_PRIVATE_CONTEXT],
         control_id,
         query_embedding,
@@ -109,4 +120,5 @@ def retrieve_for_control(control_id: str, context_notes: str, collections: dict)
         customer_chunks=customer_chunks,
         baseline_chunks=baseline_chunks,
         private_chunks=private_chunks,
+        baseline_exact_match=baseline_exact_match,
     )
