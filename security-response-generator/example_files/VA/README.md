@@ -5,7 +5,7 @@ Several other policies and standards exist at the link provded below.
 
 ## Included Files
 
-SEC530_Information_Security_Standard.pdf
+- SEC530_Information_Security_Standard.pdf
 
 ## Useful Links
 

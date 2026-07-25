@@ -88,6 +88,15 @@ while it runs, but that doesn't carry over to the terminal you invoked it
 from — you'll get `srg: command not found` until you activate it yourself in
 that session.
 
+After the first-time setup above, use `start.sh` at the beginning of each
+session instead of activating the venv by hand: it activates the venv,
+starts the Ollama daemon in the background if it isn't already running, and
+confirms both models are pulled. Source it (don't execute it) so the venv
+activation applies to your shell:
+```bash
+source start.sh
+```
+
 1. **Add source material**:
    - Drop the NIST SP 800-53 rev5 catalog (PDF, Markdown, or text) into
      `knowledge_base/`. (it's already included, but you could replace it if a newer come comes out)
