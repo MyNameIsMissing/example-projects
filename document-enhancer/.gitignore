@@ -300,6 +300,7 @@ dmypy.json
 .Trashes
 ehthumbs.db
 Thumbs.db
+*:Zone.Identifier
 
 # IDE files
 .vscode/

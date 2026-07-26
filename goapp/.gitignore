@@ -28,3 +28,6 @@ go.work.sum
 # IDE settings folder
 .idea/
 .vscode/
+
+# OS cruft
+*:Zone.Identifier
