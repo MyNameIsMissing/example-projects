@@ -32,7 +32,7 @@ if ollama list >/dev/null 2>&1; then
   echo "Ollama daemon already running."
 else
   echo "Starting Ollama daemon in the background (log: /tmp/srg-ollama-serve.log)..."
-  nohup ollama serve >/tmp/srg-ollama-serve.log 2>&1 &
+  OLLAMA_NO_CLOUD=1 nohup ollama serve >/tmp/srg-ollama-serve.log 2>&1 &
   disown
 
   ready=0

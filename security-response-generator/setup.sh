@@ -55,7 +55,7 @@ fi
 echo "Checking that the Ollama daemon is running..."
 if ! ollama list >/dev/null 2>&1; then
   echo "Ollama is installed but the daemon doesn't seem to be running."
-  echo "Start it with: ollama serve  (or launch the Ollama desktop app)"
+  echo "Start it with: OLLAMA_NO_CLOUD=1 ollama serve  (or launch the Ollama desktop app)"
   echo "Then re-run: ./setup.sh"
   exit 1
 fi

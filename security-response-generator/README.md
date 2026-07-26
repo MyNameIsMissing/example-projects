@@ -38,6 +38,10 @@ process). Nothing is sent to a third-party.
   prompt instruction, for evidence/GRC systems that reject any formatting or
   non-ASCII characters
 
+## Caveats
+
+- The ingest processor is VERY tailored to the existing NIST SP 800-53 rev 5 PDF content included in this project.  If you replace that file with different but similar content, perhaps due to an update by NIST, or using a customer proprietery catalog, the assistant may not properly track control ID content vs ancillary content (Appendix C, etc.), resulting in significant deviation from the anticipated response output.  
+
 ## Technology Stack
 
 - **Language**: Python
@@ -396,6 +400,8 @@ security-response-generator/
   [Using a customer-approved cloud gateway](#using-a-customer-approved-cloud-gateway-eg-aws-bedrock)
   for when a customer-approved gateway like AWS Bedrock is a reasonable fit
   and what it would take.
+- `start.sh` launches Ollama with `OLLAMA_NO_CLOUD=1` to prevent Ollama's
+  own default telemetry/cloud-sync calls.
 
 ## Manual verification
 
