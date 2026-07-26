@@ -61,7 +61,7 @@ if ! ollama list >/dev/null 2>&1; then
 fi
 
 echo "Pulling models..."
-ollama pull phi4-mini
+ollama pull llama3.1:8b
 ollama pull embeddinggemma
 
 # Guard for a fresh clone where the gitignored folders/subfiles don't exist yet

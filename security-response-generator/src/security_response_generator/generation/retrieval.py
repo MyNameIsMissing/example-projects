@@ -1,9 +1,14 @@
 """Retrieve relevant chunks per source tier for a given control ID + query."""
 
+import re
 from dataclasses import dataclass
 
 from security_response_generator import config
 from security_response_generator.llm.ollama_client import embed_query
+
+# Matches a NIST control/enhancement ID split into its base control and,
+# optionally, an enhancement number -- e.g. "AC-2(1)" -> base="AC-2", enh="1".
+_CONTROL_ID_SPLIT_RE = re.compile(r"^([A-Z]{2}-\d+)(?:\((\d+)\))?$")
 
 
 @dataclass
@@ -34,6 +39,19 @@ def to_chunks(query_result: dict) -> list[RetrievedChunk]:
     ids = query_result.get("ids", [[]])[0]
     documents = query_result.get("documents", [[]])[0]
     metadatas = query_result.get("metadatas", [[]])[0]
+    return _to_chunks(ids, documents, metadatas)
+
+
+def _chunks_from_get_result(get_result: dict) -> list[RetrievedChunk]:
+    """Convert a raw Chroma `collection.get(...)` result (flat shape, no batching) to chunks."""
+    return _to_chunks(
+        get_result.get("ids", []),
+        get_result.get("documents", []),
+        get_result.get("metadatas", []),
+    )
+
+
+def _to_chunks(ids, documents, metadatas) -> list[RetrievedChunk]:
     return [
         RetrievedChunk(
             text=text,
@@ -42,6 +60,20 @@ def to_chunks(query_result: dict) -> list[RetrievedChunk]:
         )
         for chunk_id, text, metadata in zip(ids, documents, metadatas)
     ]
+
+
+def _is_heading_match(chunk_text: str, control_id: str) -> bool:
+    """Whether chunk_text opens with control_id's own heading line, as opposed to
+    merely mentioning it in passing (e.g. in another control's "Related Controls:"
+    list). NIST enhancement headings only show the parenthesized number, not the
+    parent control ID (e.g. "(1) AUTOMATED ALERTS AND ADVISORIES" for "SI-5(1)").
+    """
+    split = _CONTROL_ID_SPLIT_RE.match(control_id)
+    if not split:
+        return False
+    base, enhancement = split.group(1), split.group(2)
+    anchor = rf"\({enhancement}\)" if enhancement else re.escape(base)
+    return re.match(rf"^{anchor}\s+[A-Z]", chunk_text.lstrip()) is not None
 
 
 def merge_results(
@@ -63,21 +95,37 @@ def merge_results(
 def _query_collection(
     collection, control_id: str, query_embedding, top_k: int
 ) -> tuple[list[RetrievedChunk], bool]:
-    """Query one collection, returning the merged chunks plus whether the exact-substring
-    pass found anything.
+    """Query one collection, returning the merged chunks plus whether the control ID's
+    own text was actually found.
 
-    The semantic pass has no similarity threshold -- Chroma always returns its `top_k`
-    nearest vectors, so it's non-empty for virtually any query regardless of relevance.
-    Callers that need to know whether the control ID genuinely exists (not just that
-    *some* semantically-nearby chunk exists) should use the second return value, not
-    the presence of merged chunks.
+    The exact-match pass deliberately does *not* rank by embedding similarity: under a
+    noisy or adversarial query, the control's own heading chunk can be outranked by
+    superficially "closer" unrelated chunks (verified in practice -- a near-empty page
+    fragment ranked above a control's own definition for a query with irrelevant
+    context appended). An unranked substring lookup, preferring chunks that open with
+    the control's own heading over chunks that merely reference it in passing, is used
+    instead so the real match is never silently dropped for ranking reasons.
+
+    The semantic pass, in contrast, has no similarity threshold -- Chroma always
+    returns its `top_k` nearest vectors, so it's non-empty for virtually any query
+    regardless of relevance. Callers that need to know whether the control ID
+    genuinely exists (not just that *some* semantically-nearby chunk exists) should
+    use the second return value, not the presence of merged chunks.
     """
-    metadata_pass = _safe_query(
-        collection, query_embedding, top_k, where_document={"$contains": control_id}
-    )
+    exact_chunks = _exact_match_chunks(collection, control_id, top_k)
     semantic_pass = _safe_query(collection, query_embedding, top_k)
-    merged = merge_results(metadata_pass, semantic_pass, top_k)
-    return merged, bool(metadata_pass)
+    merged = merge_results(exact_chunks, semantic_pass, top_k)
+    return merged, bool(exact_chunks)
+
+
+def _exact_match_chunks(collection, control_id: str, top_k: int) -> list[RetrievedChunk]:
+    try:
+        result = collection.get(where_document={"$contains": control_id})
+    except Exception:
+        return []
+    candidates = _chunks_from_get_result(result)
+    heading_matches = [c for c in candidates if _is_heading_match(c.text, control_id)]
+    return (heading_matches or candidates)[:top_k]
 
 
 def _safe_query(

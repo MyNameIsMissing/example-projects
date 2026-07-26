@@ -5,7 +5,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-GENERATION_MODEL = os.environ.get("SRG_GEN_MODEL", "phi4-mini")
+GENERATION_MODEL = os.environ.get("SRG_GEN_MODEL", "llama3.1:8b")
 EMBEDDING_MODEL = os.environ.get("SRG_EMBED_MODEL", "embeddinggemma")
 
 # A large source document (e.g. the ~490-page NIST 800-53 rev5 catalog) can

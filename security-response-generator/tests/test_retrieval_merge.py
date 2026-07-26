@@ -12,15 +12,18 @@ def _chunk(chunk_id: str, text: str = "text", path: str = "doc.md") -> Retrieved
 
 
 class _FakeCollection:
-    """Returns one canned result for the exact-substring pass and another for the
-    unfiltered semantic pass, so tests can tell the two apart."""
+    """Returns one canned result for the unranked exact-substring get() lookup and
+    another for the embedding-ranked semantic query(), so tests can tell them apart."""
 
-    def __init__(self, metadata_result: dict, semantic_result: dict):
-        self._metadata_result = metadata_result
+    def __init__(self, exact_match_result: dict, semantic_result: dict):
+        self._exact_match_result = exact_match_result
         self._semantic_result = semantic_result
 
+    def get(self, where_document=None):
+        return self._exact_match_result
+
     def query(self, query_embeddings, n_results, where_document=None):
-        return self._metadata_result if where_document else self._semantic_result
+        return self._semantic_result
 
 
 def _raw_result(chunk_ids: list[str]) -> dict:
@@ -28,6 +31,16 @@ def _raw_result(chunk_ids: list[str]) -> dict:
         "ids": [chunk_ids],
         "documents": [[f"text {chunk_id}" for chunk_id in chunk_ids]],
         "metadatas": [[{"source_path": "doc.md"} for _ in chunk_ids]],
+    }
+
+
+def _flat_result(chunk_ids: list[str], texts: dict[str, str] | None = None) -> dict:
+    """A Chroma `collection.get(...)`-shaped result (flat, no query-batching nesting)."""
+    texts = texts or {}
+    return {
+        "ids": chunk_ids,
+        "documents": [texts.get(chunk_id, f"text {chunk_id}") for chunk_id in chunk_ids],
+        "metadatas": [{"source_path": "doc.md"} for _ in chunk_ids],
     }
 
 
@@ -73,7 +86,9 @@ def test_to_chunks_handles_empty_result():
 
 def test_query_collection_reports_exact_match_when_metadata_pass_hits():
     collection = _FakeCollection(
-        metadata_result=_raw_result(["a"]),
+        exact_match_result=_flat_result(
+            ["a"], texts={"a": "AC-2 ACCOUNT MANAGEMENT\nControl: a. Define account types."}
+        ),
         semantic_result=_raw_result(["a", "b"]),
     )
 
@@ -88,7 +103,7 @@ def test_query_collection_reports_no_exact_match_for_semantic_only_hits():
     # chunks -- Chroma's vector query has no similarity threshold -- but the
     # exact-substring pass correctly finds nothing, so exact_match must be False.
     collection = _FakeCollection(
-        metadata_result=_raw_result([]),
+        exact_match_result=_flat_result([]),
         semantic_result=_raw_result(["x", "y"]),
     )
 
@@ -96,6 +111,61 @@ def test_query_collection_reports_no_exact_match_for_semantic_only_hits():
 
     assert exact_match is False
     assert [c.chunk_id for c in chunks] == ["x", "y"]
+
+
+def test_is_heading_match_true_for_base_control_heading():
+    text = "AC-2 ACCOUNT MANAGEMENT\nControl: a. Define and document account types."
+    assert retrieval._is_heading_match(text, "AC-2") is True
+
+
+def test_is_heading_match_false_for_passing_reference():
+    text = "Related Controls: AC-2, AC-3, RA-5."
+    assert retrieval._is_heading_match(text, "AC-2") is False
+
+
+def test_is_heading_match_true_for_enhancement_shorthand_heading():
+    # NIST enhancement headings show only the parenthesized number, not the parent ID.
+    text = "(1) AUTOMATED ALERTS AND ADVISORIES\nBroadcast security alert information."
+    assert retrieval._is_heading_match(text, "SI-5(1)") is True
+
+
+def test_is_heading_match_false_for_wrong_enhancement_number():
+    text = "(2) SOME OTHER ENHANCEMENT\nDiscussion text."
+    assert retrieval._is_heading_match(text, "SI-5(1)") is False
+
+
+def test_exact_match_chunks_prefers_heading_over_passing_mention():
+    # Regression test: a control's own heading chunk must win over a chunk that only
+    # references it inside another control's "Related Controls:" list, even though
+    # both contain the literal substring.
+    collection = _FakeCollection(
+        exact_match_result=_flat_result(
+            ["mention", "heading"],
+            texts={
+                "mention": "Related Controls: PT-3, PT-5, RA-5.",
+                "heading": "PT-3 PERSONALLY IDENTIFIABLE INFORMATION PROCESSING PURPOSES\n"
+                "Control: a. Identify and document the purpose(s).",
+            },
+        ),
+        semantic_result=_raw_result([]),
+    )
+
+    chunks = retrieval._exact_match_chunks(collection, "PT-3", top_k=5)
+
+    assert [c.chunk_id for c in chunks] == ["heading"]
+
+
+def test_exact_match_chunks_falls_back_to_passing_mentions_if_no_heading_found():
+    collection = _FakeCollection(
+        exact_match_result=_flat_result(
+            ["mention"], texts={"mention": "Related Controls: PT-3, PT-5, RA-5."}
+        ),
+        semantic_result=_raw_result([]),
+    )
+
+    chunks = retrieval._exact_match_chunks(collection, "PT-3", top_k=5)
+
+    assert [c.chunk_id for c in chunks] == ["mention"]
 
 
 def test_retrieval_result_refusal_flag_reflects_exact_match_not_chunk_presence():

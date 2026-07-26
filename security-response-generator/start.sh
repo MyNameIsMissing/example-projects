@@ -54,7 +54,7 @@ fi
 
 missing_models=""
 installed_models="$(ollama list 2>/dev/null | awk 'NR>1 {print $1}')"
-for m in "${SRG_GEN_MODEL:-phi4-mini}" "${SRG_EMBED_MODEL:-embeddinggemma}"; do
+for m in "${SRG_GEN_MODEL:-llama3.1:8b}" "${SRG_EMBED_MODEL:-embeddinggemma}"; do
   if ! grep -qxE "${m}(:latest)?" <<<"$installed_models"; then
     missing_models="$missing_models $m"
   fi

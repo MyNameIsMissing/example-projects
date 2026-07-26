@@ -58,12 +58,12 @@ cd document-enhancer
 Key architecture: `server.js` exposes REST endpoints (`/api/upload`, `/api/enhance/:fileId`, `/api/status/:fileId`, etc.); `utils/imageProcessor.js` spawns the Python Real-ESRGAN subprocess. The ~67MB model downloads automatically on first enhancement.
 
 ### `security-response-generator/` — Local RAG Security Control Response Generator
-Python CLI that drafts Markdown security control responses (e.g. NIST 800-53 "SI-5") via local RAG over three tiers: the NIST 800-53 rev5 baseline (`knowledge_base/`, committed), engagement-specific customer/state standards (`customer_standards/`, gitignored), and non-public system details (`private_context/`, gitignored). If a material gap remains, it asks a clarifying question interactively (up to `SRG_MAX_FOLLOWUP_TURNS`, default 2) rather than guessing, falling back to a best-effort response with `[PLACEHOLDER: ...]` markers if the gap is never filled. Runs entirely locally via Ollama (Phi-4-mini generation by default -- swappable via `SRG_GEN_MODEL`, e.g. Gemma 4 E4B or Llama 3.3 8B if more VRAM is available; EmbeddingGemma embeddings) and an embedded ChromaDB store.
+Python CLI that drafts Markdown security control responses (e.g. NIST 800-53 "SI-5") via local RAG over three tiers: the NIST 800-53 rev5 baseline (`knowledge_base/`, committed), engagement-specific customer/state standards (`customer_standards/`, gitignored), and non-public system details (`private_context/`, gitignored). If a material gap remains, it asks a clarifying question interactively (up to `SRG_MAX_FOLLOWUP_TURNS`, default 2) rather than guessing, falling back to a best-effort response with `[PLACEHOLDER: ...]` markers if the gap is never filled. Runs entirely locally via Ollama (Llama 3.1 8B generation by default -- swappable via `SRG_GEN_MODEL`; Phi-4-mini is lighter for constrained hardware but tested less reliable at staying on the requested control ID, Gemma 4 E4B is an option with more VRAM; EmbeddingGemma embeddings) and an embedded ChromaDB store.
 
 **First-time setup:**
 ```bash
 cd security-response-generator
-./setup.sh          # creates venv, installs deps, pulls phi4-mini + embeddinggemma via Ollama
+./setup.sh          # creates venv, installs deps, pulls llama3.1:8b + embeddinggemma via Ollama
 source start.sh     # subsequent sessions: activates venv, starts the Ollama daemon if needed
 ```
 

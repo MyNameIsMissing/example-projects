@@ -1,4 +1,9 @@
-from security_response_generator.ingest.loaders import iter_source_files, load_document
+from security_response_generator.ingest import loaders
+from security_response_generator.ingest.loaders import (
+    _is_control_crosswalk_table,
+    iter_source_files,
+    load_document,
+)
 
 
 def test_iter_source_files_excludes_readme_and_gitkeep(tmp_path):
@@ -33,3 +38,52 @@ def test_load_document_reads_markdown_with_relative_path(tmp_path):
 
     assert document.source_path == "sub/control.md"
     assert document.text == "SI-5 content"
+
+
+def test_is_control_crosswalk_table_detects_appendix_c_page():
+    page_text = (
+        "APPENDIX C   PAGE 463\n"
+        "CONTROL \nNUMBER \nCONTROL NAME \nCONTROL ENHANCEMENT NAME \n"
+        "IMPLEMENTED \nBY \nASSURANCE \n"
+        "SI-5 Security Alerts, Advisories, and Directives O v\n"
+    )
+    assert _is_control_crosswalk_table(page_text) is True
+
+
+def test_is_control_crosswalk_table_ignores_narrative_control_text():
+    page_text = (
+        "SI-5 SECURITY ALERTS, ADVISORIES, AND DIRECTIVES\n"
+        "Control: a. Receive system security alerts, advisories, and directives."
+    )
+    assert _is_control_crosswalk_table(page_text) is False
+
+
+class _FakePage:
+    def __init__(self, text):
+        self._text = text
+
+    def extract_text(self):
+        return self._text
+
+
+class _FakePdfReader:
+    def __init__(self, path):
+        self.pages = [
+            _FakePage("SI-5 SECURITY ALERTS, ADVISORIES, AND DIRECTIVES\nControl: a. Receive..."),
+            _FakePage(
+                "APPENDIX C   PAGE 463\n"
+                "CONTROL \nNUMBER \nCONTROL NAME \nCONTROL ENHANCEMENT NAME \n"
+                "IMPLEMENTED \nBY \nASSURANCE \nSI-5 Security Alerts... O v\n"
+            ),
+        ]
+
+
+def test_load_pdf_skips_control_crosswalk_table_pages(monkeypatch, tmp_path):
+    monkeypatch.setattr(loaders, "PdfReader", _FakePdfReader)
+    pdf_path = tmp_path / "doc.pdf"
+    pdf_path.write_bytes(b"")
+
+    document = load_document(pdf_path, tmp_path)
+
+    assert "SI-5 SECURITY ALERTS" in document.text
+    assert "CONTROL ENHANCEMENT NAME" not in document.text

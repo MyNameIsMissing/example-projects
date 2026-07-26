@@ -10,6 +10,13 @@ from security_response_generator.config import SUPPORTED_EXTENSIONS
 
 _EXCLUDED_FILENAMES = {"README.md", ".gitkeep"}
 
+# NIST 800-53's Appendix C is a multi-page control-crosswalk table (control
+# number/name/enhancement name/implemented-by/assurance columns), not
+# narrative control text. Every control ID appears as a row in it, which
+# pollutes both exact-substring and semantic retrieval with zero grounding
+# value, so these pages are dropped before chunking rather than ingested.
+_CONTROL_TABLE_MARKERS = ("APPENDIX C", "CONTROL ENHANCEMENT NAME", "ASSURANCE")
+
 
 @dataclass
 class LoadedDocument:
@@ -47,5 +54,11 @@ def _load_pdf(path: Path) -> str:
     pages = []
     for page_number, page in enumerate(reader.pages, start=1):
         page_text = page.extract_text() or ""
+        if _is_control_crosswalk_table(page_text):
+            continue
         pages.append(f"\n\n[page {page_number}]\n{page_text}")
     return "".join(pages)
+
+
+def _is_control_crosswalk_table(page_text: str) -> bool:
+    return all(marker in page_text for marker in _CONTROL_TABLE_MARKERS)

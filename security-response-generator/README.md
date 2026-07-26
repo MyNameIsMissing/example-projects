@@ -23,7 +23,7 @@ process). Nothing is sent to a third-party.
 
 - Three-tier retrieval that respects customer/state standards as
   authoritative when they exist, and explicitly flags when they don't.
-- Runs on U.S.-developed, open-weight models (Phi-4-mini by default; see
+- Runs on U.S.-developed, open-weight models (Llama 3.1 8B by default; see
   [Choosing a generation model](#choosing-a-generation-model)) rather than a
   closed-source or overseas API
 - Refuses to answer (rather than hallucinate) if a control ID has no match
@@ -41,12 +41,13 @@ process). Nothing is sent to a third-party.
 ## Technology Stack
 
 - **Language**: Python
-- **Generation model**: [Phi-4-mini](https://ollama.com/library/phi4-mini)
-  via [Ollama](https://ollama.com) by default — a small, dense, text-only
-  model chosen for fast load times and a light VRAM footprint on
-  constrained/consumer hardware. Swappable via `SRG_GEN_MODEL` -- see
-  [Choosing a generation model](#choosing-a-generation-model) for larger
-  alternatives if you have more VRAM to spare.
+- **Generation model**: [Llama 3.1 8B](https://ollama.com/library/llama3.1)
+  via [Ollama](https://ollama.com) by default — a dense, text-only model
+  that reliably stays grounded on the specific control ID being asked
+  about, while still fitting comfortably in 12GB of VRAM alongside the
+  embedding model. Swappable via `SRG_GEN_MODEL` -- see
+  [Choosing a generation model](#choosing-a-generation-model) for smaller
+  and larger alternatives and the tradeoffs found in practice.
 - **Embedding model**: EmbeddingGemma via Ollama
 - **Vector store**: ChromaDB (embedded/local, no server)
 - **CLI**: [Typer](https://typer.tiangolo.com)
@@ -56,11 +57,12 @@ process). Nothing is sent to a third-party.
 - Permission from your customer to use this tool.  Different customers have very different AI permissions models.  
 - Python 3.11+
 - [Ollama](https://ollama.com/download) installed, with the daemon running
-- A modest amount of VRAM or unified memory for `phi4-mini` (~2.5GB
-  download, roughly 3-4GB of VRAM once loaded alongside `embeddinggemma`).
-  If you have significantly more VRAM available, see
-  [Choosing a generation model](#choosing-a-generation-model) for larger,
-  potentially higher-quality alternatives.
+- A modest amount of VRAM or unified memory for `llama3.1:8b` (~4.9GB
+  download, ~7GB of VRAM once loaded alongside `embeddinggemma`) -- fits
+  comfortably on a 12GB card. See
+  [Choosing a generation model](#choosing-a-generation-model) for smaller
+  options if your hardware is more constrained, or larger ones if you have
+  VRAM to spare.
 
 ## Installation
 
@@ -73,46 +75,59 @@ process). Nothing is sent to a third-party.
    ```
    This creates a `.venv`, installs the package in editable mode, checks
    that Ollama is installed and running, and pulls both models
-   (`phi4-mini`, `embeddinggemma`).
+   (`llama3.1:8b`, `embeddinggemma`).
 
 2. **Manual installation (alternative)**:
    ```bash
    python3 -m venv .venv
    source .venv/bin/activate
    pip install -e ".[dev]"
-   ollama pull phi4-mini
+   ollama pull llama3.1:8b
    ollama pull embeddinggemma
    ```
 
 ## Choosing a generation model
 
-The default, `phi4-mini`, was picked for speed on constrained hardware: it's
-a small (~3.8B parameter), dense, text-only model, so it loads in seconds
-and comfortably fits alongside `embeddinggemma` in a few GB of VRAM. That
-matters more than it might sound -- on tight VRAM budgets, competing for
-memory with the embedding model can cause the generation model to be
-evicted and reloaded from scratch on every single `srg generate` call,
-turning a normally-fast response into a multi-minute wait. If you're running
-this on a laptop, a shared/remote GPU, or anything without VRAM to spare,
-`phi4-mini` is the model least likely to fight you for memory.
+The default, `llama3.1:8b`, was picked after directly comparing it
+side-by-side against smaller and larger alternatives on this exact tool,
+not just on paper. The thing that actually matters for this workload isn't
+raw benchmark scores -- it's whether the model reliably stays locked onto
+the *specific control ID* it was asked about, using only the material
+retrieved for that control. In repeated testing, `llama3.1:8b` did; smaller
+models sometimes didn't (see below). It's also a plain dense, text-only
+model (no vision/audio encoders to load), so its ~7GB resident footprint
+(Q4_K_M) coexists comfortably with `embeddinggemma` on a 12GB card without
+the evict-and-reload cycling that tighter-fitting models can trigger on
+every `srg generate` call (see the "Responses are much slower than
+expected" entry in [Troubleshooting](#troubleshooting) for what that
+looks like).
 
-If you have significantly more VRAM available (roughly 10GB+), a larger
-model will generally draft more nuanced, better-grounded responses. Two
-reasonable options, pulled the same way as the default:
+If your hardware is more constrained, **[Phi-4-mini](https://ollama.com/library/phi4-mini)**
+(Microsoft) is smaller (~3.8B parameters, ~2.5GB download) and loads even
+faster. Be aware of the tradeoff found in testing, though: it noticeably
+drifted off the requested control ID more often than `llama3.1:8b` --
+answering under the wrong control heading entirely, or letting unrelated
+material (e.g. from `private_context`) bleed into the response -- even once
+retrieval was confirmed to be feeding it clean, on-topic material for the
+right control. That's a model-capability gap, not a retrieval bug. Prefer
+`llama3.1:8b` if your hardware can fit it; treat `phi4-mini` as a
+speed/VRAM tradeoff you're consciously accepting, not a drop-in equivalent.
 
-- **[Gemma 4 E4B](https://ollama.com/library/gemma4)** (Google) --
-  larger and multimodal (it also bundles vision/audio encoders this tool
-  never uses, which adds some load-time overhead), but capable.
-- **[Llama 3.3 8B](https://ollama.com/library/llama3.3)** (Meta) -- a solid
-  general-purpose dense model at a similar size class.
+If you have significantly more VRAM available (roughly 10GB+),
+**[Gemma 4 E4B](https://ollama.com/library/gemma4)** (Google) is also an
+option -- larger and potentially more capable, but multimodal (it bundles
+vision/audio encoders this tool never uses), which adds load-time overhead
+and made it prone to VRAM-eviction cycling on a 12GB card in testing, since
+its footprint sits right at the edge of what's available alongside
+`embeddinggemma`.
 
 Switch models with the `SRG_GEN_MODEL` environment variable -- no code
 changes needed, since `srg` talks to Ollama's generic chat API regardless
 of which model is behind it:
 
 ```bash
-ollama pull gemma4:e4b
-SRG_GEN_MODEL=gemma4:e4b srg generate SI-5 --context "..."
+ollama pull phi4-mini
+SRG_GEN_MODEL=phi4-mini srg generate SI-5 --context "..."
 ```
 
 To make a switch permanent for your own sessions, export `SRG_GEN_MODEL` in
@@ -142,7 +157,7 @@ vetted, under whatever data-handling terms they negotiated with AWS. If
 that's your situation, it can be a reasonable choice, and often a better
 one: Bedrock exposes larger, frontier-class models than what's practical to
 run locally on constrained hardware, which can mean meaningfully more
-nuanced, better-grounded responses than `phi4-mini` or the other local
+nuanced, better-grounded responses than `llama3.1:8b` or the other local
 options above.
 
 A few things worth confirming before doing this on any given engagement:
@@ -300,7 +315,7 @@ manually — see the "Manual verification" section below.
    `prompts/instructions.md` (editable — controls tone, structure, and the
    authoritative-standards rule) and a format-specific instruction (Markdown
    vs. plain ASCII text, chosen via `--format`), then sent to the generation
-   model (`phi4-mini` by default — see
+   model (`llama3.1:8b` by default — see
    [Choosing a generation model](#choosing-a-generation-model)) via Ollama.
    The model is asked for a JSON-schema-constrained reply (`needs_info`,
    `question`, `response`) rather than free-form text, so the follow-up
@@ -349,10 +364,9 @@ security-response-generator/
   desktop app, then retry.
 - **`srg generate` refuses every control ID**: run `srg ingest` first — the
   NIST baseline collection is empty until `knowledge_base/` is ingested.
-- **Model pull is slow/fails**: `phi4-mini` is a ~2.5GB download (larger
-  alternatives from
-  [Choosing a generation model](#choosing-a-generation-model) can be
-  several times that); check disk space and network connectivity.
+- **Model pull is slow/fails**: `llama3.1:8b` is a ~4.9GB download (see
+  [Choosing a generation model](#choosing-a-generation-model) for smaller
+  or larger alternatives); check disk space and network connectivity.
 - **Responses are much slower than expected**: run `ollama ps` to check
   whether the model is fully on GPU or partially spilled to system RAM/CPU
   (Ollama does this automatically and silently if VRAM is tight, and it's a
