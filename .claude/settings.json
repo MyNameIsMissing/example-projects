@@ -19,5 +19,9 @@
       "Bash(git push -f *)",
       "Bash(rm -rf *)"
     ]
+  },
+  "spinnerVerbs": {
+    "mode": "replace",
+    "verbs": ["Processing"]
   }
 }

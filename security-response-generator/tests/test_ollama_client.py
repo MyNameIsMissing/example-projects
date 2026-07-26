@@ -90,10 +90,11 @@ def test_embed_query_returns_single_vector(monkeypatch):
 def test_chat_messages_calls_ollama_with_configured_model_and_raw_messages(monkeypatch):
     captured = {}
 
-    def fake_chat(model, messages, options):
+    def fake_chat(model, messages, options, format):
         captured["model"] = model
         captured["messages"] = messages
         captured["options"] = options
+        captured["format"] = format
         return {"message": {"content": "response text"}}
 
     monkeypatch.setattr(ollama_client.ollama, "chat", fake_chat)
@@ -101,7 +102,7 @@ def test_chat_messages_calls_ollama_with_configured_model_and_raw_messages(monke
     messages = [
         {"role": "system", "content": "system prompt"},
         {"role": "user", "content": "user prompt"},
-        {"role": "assistant", "content": "NEEDS_INFO: what tool do you use?"},
+        {"role": "assistant", "content": '{"needs_info": true, "question": "what tool?"}'},
         {"role": "user", "content": "Acme Sentinel"},
     ]
     result = ollama_client.chat_messages(messages)
@@ -110,13 +111,29 @@ def test_chat_messages_calls_ollama_with_configured_model_and_raw_messages(monke
     assert captured["model"] == ollama_client.GENERATION_MODEL
     assert captured["messages"] == messages
     assert captured["options"] == {"num_ctx": ollama_client.NUM_CTX}
+    assert captured["format"] is None
+
+
+def test_chat_messages_passes_response_format_through(monkeypatch):
+    captured = {}
+    schema = {"type": "object", "properties": {"needs_info": {"type": "boolean"}}}
+
+    def fake_chat(model, messages, options, format):
+        captured["format"] = format
+        return {"message": {"content": "response text"}}
+
+    monkeypatch.setattr(ollama_client.ollama, "chat", fake_chat)
+
+    ollama_client.chat_messages([{"role": "user", "content": "hi"}], response_format=schema)
+
+    assert captured["format"] == schema
 
 
 def test_chat_messages_num_ctx_respects_override(monkeypatch):
     monkeypatch.setattr(ollama_client, "NUM_CTX", 32768)
     captured = {}
 
-    def fake_chat(model, messages, options):
+    def fake_chat(model, messages, options, format):
         captured["options"] = options
         return {"message": {"content": "response text"}}
 

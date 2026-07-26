@@ -6,13 +6,13 @@ retrieval-augmented generation (RAG) grounded in three tiers of source
 material. Output can be Markdown or plain ASCII text, depending on what the
 target system of record accepts:
 
-1. **NIST 800-53 rev5 baseline** — the most typical control catalog.  If your customer uses something different like PCI-DSS or HIPAA, replace or augment  this doc with the appropriate catalog document.
+1. **NIST 800-53 rev5 baseline** — the most typical control catalog.  If your customer uses something different like PCI-DSS, HIPAA, or ISO/IEC 27001:2022 you'll need to refactor a number of things in this tool.
 2. **Customer/state-specific standards** — e.g. a state's published
    per-control guidance with state-specific parameter values. When present
    for a control, this is treated as **authoritative** over generic NIST
    language.  Its content must match the control catalog IDs.  
 3. **Private system context** — non-public specifics about the system being
-   assessed, supplied via a standing document [../private_context/yourfile.md] plus freeform notes per query.
+   assessed, supplied via a standing document `[../private_context/yourfile.md]` plus freeform context notes per query.
 
 Everything runs locally: embeddings and generation both go through
 [Ollama](https://ollama.com), and retrieval uses an embedded
@@ -23,9 +23,12 @@ process). Nothing is sent to a third-party.
 
 - Three-tier retrieval that respects customer/state standards as
   authoritative when they exist, and explicitly flags when they don't.
-- U.S. based open-source model from Google
+- Runs on U.S.-developed, open-weight models (Llama 3.1 8B by default; see
+  [Choosing a generation model](#choosing-a-generation-model)) rather than a
+  closed-source or overseas API
 - Refuses to answer (rather than hallucinate) if a control ID has no match
   in the NIST baseline
+    - This is a dedicated **tool**, NOT a general chatbot
 - Interactive follow-up questions when a material part of the control isn't
   covered by the supplied context, up to a configurable round limit, with a
   best-effort placeholder-annotated response if the model still isn't done
@@ -35,14 +38,20 @@ process). Nothing is sent to a third-party.
   prompt instruction, for evidence/GRC systems that reject any formatting or
   non-ASCII characters
 
+## Caveats
+
+- The ingest processor is VERY tailored to the existing NIST SP 800-53 rev 5 PDF content included in this project.  If you replace that file with different but similar content, perhaps due to an update by NIST, or using a customer proprietery catalog, the assistant may not properly track control ID content vs ancillary content (Appendix C, etc.), resulting in significant deviation from the anticipated response output.  
+
 ## Technology Stack
 
 - **Language**: Python
-- **Generation model**: Gemma 4 E4B via [Ollama](https://ollama.com) — the
-  lighter, edge-oriented member of the Gemma 4 family (vs. the 12B/26B
-  variants), a good fit for this project's workload: short text drafting
-  and concept mapping over retrieved context, not long-context or
-  heavy multi-step reasoning
+- **Generation model**: [Llama 3.1 8B](https://ollama.com/library/llama3.1)
+  via [Ollama](https://ollama.com) by default — a dense, text-only model
+  that reliably stays grounded on the specific control ID being asked
+  about, while still fitting comfortably in 12GB of VRAM alongside the
+  embedding model. Swappable via `SRG_GEN_MODEL` -- see
+  [Choosing a generation model](#choosing-a-generation-model) for smaller
+  and larger alternatives and the tradeoffs found in practice.
 - **Embedding model**: EmbeddingGemma via Ollama
 - **Vector store**: ChromaDB (embedded/local, no server)
 - **CLI**: [Typer](https://typer.tiangolo.com)
@@ -52,9 +61,12 @@ process). Nothing is sent to a third-party.
 - Permission from your customer to use this tool.  Different customers have very different AI permissions models.  
 - Python 3.11+
 - [Ollama](https://ollama.com/download) installed, with the daemon running
-- A modest amount of VRAM or unified memory for `gemma4:e4b` (~9.6GB
-  download). Public estimates for its runtime VRAM footprint vary quite a
-  bit but tend to agree on roughly 3-8GB required.
+- A modest amount of VRAM or unified memory for `llama3.1:8b` (~4.9GB
+  download, ~7GB of VRAM once loaded alongside `embeddinggemma`) -- fits
+  comfortably on a 12GB card. See
+  [Choosing a generation model](#choosing-a-generation-model) for smaller
+  options if your hardware is more constrained, or larger ones if you have
+  VRAM to spare.
 
 ## Installation
 
@@ -67,16 +79,112 @@ process). Nothing is sent to a third-party.
    ```
    This creates a `.venv`, installs the package in editable mode, checks
    that Ollama is installed and running, and pulls both models
-   (`gemma4:e4b`, `embeddinggemma`).
+   (`llama3.1:8b`, `embeddinggemma`).
 
 2. **Manual installation (alternative)**:
    ```bash
    python3 -m venv .venv
    source .venv/bin/activate
    pip install -e ".[dev]"
-   ollama pull gemma4:e4b
+   ollama pull llama3.1:8b
    ollama pull embeddinggemma
    ```
+
+## Choosing a generation model
+
+The default, `llama3.1:8b`, was picked after directly comparing it
+side-by-side against smaller and larger alternatives on this exact tool,
+not just on paper. The thing that actually matters for this workload isn't
+raw benchmark scores -- it's whether the model reliably stays locked onto
+the *specific control ID* it was asked about, using only the material
+retrieved for that control. In repeated testing, `llama3.1:8b` did; smaller
+models sometimes didn't (see below). It's also a plain dense, text-only
+model (no vision/audio encoders to load), so its ~7GB resident footprint
+(Q4_K_M) coexists comfortably with `embeddinggemma` on a 12GB card without
+the evict-and-reload cycling that tighter-fitting models can trigger on
+every `srg generate` call (see the "Responses are much slower than
+expected" entry in [Troubleshooting](#troubleshooting) for what that
+looks like).
+
+If your hardware is more constrained, **[Phi-4-mini](https://ollama.com/library/phi4-mini)**
+(Microsoft) is smaller (~3.8B parameters, ~2.5GB download) and loads even
+faster. Be aware of the tradeoff found in testing, though: it noticeably
+drifted off the requested control ID more often than `llama3.1:8b` --
+answering under the wrong control heading entirely, or letting unrelated
+material (e.g. from `private_context`) bleed into the response -- even once
+retrieval was confirmed to be feeding it clean, on-topic material for the
+right control. That's a model-capability gap, not a retrieval bug. Prefer
+`llama3.1:8b` if your hardware can fit it; treat `phi4-mini` as a
+speed/VRAM tradeoff you're consciously accepting, not a drop-in equivalent.
+
+If you have significantly more VRAM available (roughly 10GB+),
+**[Gemma 4 E4B](https://ollama.com/library/gemma4)** (Google) is also an
+option -- larger and potentially more capable, but multimodal (it bundles
+vision/audio encoders this tool never uses), which adds load-time overhead
+and made it prone to VRAM-eviction cycling on a 12GB card in testing, since
+its footprint sits right at the edge of what's available alongside
+`embeddinggemma`.
+
+Switch models with the `SRG_GEN_MODEL` environment variable -- no code
+changes needed, since `srg` talks to Ollama's generic chat API regardless
+of which model is behind it:
+
+```bash
+ollama pull phi4-mini
+SRG_GEN_MODEL=phi4-mini srg generate SI-5 --context "..."
+```
+
+To make a switch permanent for your own sessions, export `SRG_GEN_MODEL` in
+`start.sh` (see [Usage](#usage) below) or your shell profile. The
+interactive follow-up-question feature (see
+[Interactive follow-up questions](#interactive-follow-up-questions)) is
+enforced via Ollama's structured-output/JSON-schema support, not by asking
+the model to nicely follow a formatting convention -- so it stays reliable
+regardless of which generation model you pick, including smaller/leaner
+ones that are otherwise less rigorous about following instructions.
+
+The embedding model (`embeddinggemma`) is a separate, much smaller model
+used only for retrieval, and typically doesn't need to change when you swap
+the generation model.
+
+### Using a customer-approved cloud gateway (e.g. AWS Bedrock)
+
+Everything above assumes local models because most engagements haven't
+pre-approved sending customer or system data to any external service (see
+[Prerequisites](#prerequisites) and
+[Security & Privacy](#security--privacy)). That default flips for a specific,
+common situation: a customer that already provides AWS Bedrock as their own
+sanctioned interface to a set of approved models. In that case, routing
+generation through the customer's Bedrock endpoint isn't sending data to an
+arbitrary third party -- it stays inside a boundary the customer has already
+vetted, under whatever data-handling terms they negotiated with AWS. If
+that's your situation, it can be a reasonable choice, and often a better
+one: Bedrock exposes larger, frontier-class models than what's practical to
+run locally on constrained hardware, which can mean meaningfully more
+nuanced, better-grounded responses than `llama3.1:8b` or the other local
+options above.
+
+A few things worth confirming before doing this on any given engagement:
+
+- Get it in writing the same way you would any other AI usage on the
+  engagement -- Bedrock accounts and configurations vary (region, logging/
+  retention via CloudTrail, cross-region inference, per-model-provider data
+  terms), and "the customer approved Bedrock" doesn't automatically cover
+  every model or setting available through it.
+- Retrieval and embedding (`embeddinggemma`) would stay local exactly as
+  today -- this only changes where the assembled prompt for the
+  *generation* step gets sent, the same distinction as choosing between
+  local models above.
+
+This isn't implemented today -- `llm/ollama_client.py`'s `chat_messages()`
+is currently the only function that talks to a generation model, and it
+assumes Ollama's chat API. Adding Bedrock support would mean a parallel
+client (e.g. via `boto3`'s `bedrock-runtime` Converse API) behind a
+provider switch, plus reimplementing the JSON-schema structured-output
+contract used for the
+[interactive follow-up mechanism](#interactive-follow-up-questions) against
+Bedrock's equivalent. It's noted here as a legitimate option worth knowing
+about, not a decision this tool makes for you.
 
 ## Usage
 
@@ -86,6 +194,15 @@ after running `setup.sh`: the script activates the venv in its own subshell
 while it runs, but that doesn't carry over to the terminal you invoked it
 from — you'll get `srg: command not found` until you activate it yourself in
 that session.
+
+After the first-time setup above, use `start.sh` at the beginning of each
+session instead of activating the venv by hand: it activates the venv,
+starts the Ollama daemon in the background if it isn't already running, and
+confirms both models are pulled. Source it (don't execute it) so the venv
+activation applies to your shell:
+```bash
+source start.sh
+```
 
 1. **Add source material**:
    - Drop the NIST SP 800-53 rev5 catalog (PDF, Markdown, or text) into
@@ -107,7 +224,7 @@ that session.
 
 3. **Generate a response**:
    ```bash
-   srg generate SI-5 --context "our environment uses a SaaS SIEM for continuous monitoring"
+   srg generate "SI-5" --context "our environment uses a SaaS SIEM for continuous monitoring"
    ```
    **This may take some time, ESPECIALLY on the initial request.**  
    Prints Markdown to stdout by default. Add `-o response.md` to also write
@@ -118,7 +235,7 @@ that session.
    For evidence/GRC systems that only accept raw text with no formatting (maybe Archer or Xacta),
    add `--format text`:
    ```bash
-   srg generate SI-5 --format text --context "..." -o response.txt
+   srg generate "SI-5" --format text --context "..." -o response.txt
    ```
    This produces plain ASCII output — no Markdown syntax, no smart quotes,
    em-dashes, bullets, or other non-ASCII characters.  
@@ -132,7 +249,7 @@ isn't covered by the retrieved material, your `--context` notes, or anything
 already discussed, it can ask you a clarifying question instead of guessing:
 
 ```
-$ srg generate SI-5 --context "we use Acme Sentinel for monitoring"
+$ srg generate "SI-5" --context "we use Acme Sentinel for monitoring"
 
 What is the required review/dissemination timeframe for security alerts in
 your environment?
@@ -159,6 +276,11 @@ When you move to a different customer:
 # replace the contents of customer_standards/ with the new customer's docs
 srg ingest --rebuild
 ```
+
+`example_files/` has starter material per jurisdiction (`Federal/`, `VA/`,
+`PA/`, `CA/`, `MD/`, `HI/`) to make this faster — copy what's relevant into
+`customer_standards/` before running `--rebuild`. See
+`example_files/README.md` for details.
 
 ## Development
 
@@ -196,11 +318,15 @@ manually — see the "Manual verification" section below.
    the analyst's notes are assembled into a prompt alongside
    `prompts/instructions.md` (editable — controls tone, structure, and the
    authoritative-standards rule) and a format-specific instruction (Markdown
-   vs. plain ASCII text, chosen via `--format`), then sent to Gemma 4 E4B
-   via Ollama.
-5. **Follow up if needed**: if the reply is a `NEEDS_INFO: <question>`
-   marker, the question is shown to you interactively and your typed answer
-   is appended to the conversation before calling the model again — up to
+   vs. plain ASCII text, chosen via `--format`), then sent to the generation
+   model (`llama3.1:8b` by default — see
+   [Choosing a generation model](#choosing-a-generation-model)) via Ollama.
+   The model is asked for a JSON-schema-constrained reply (`needs_info`,
+   `question`, `response`) rather than free-form text, so the follow-up
+   mechanism below works reliably regardless of which model is configured.
+5. **Follow up if needed**: if the reply has `needs_info: true`, its
+   `question` is shown to you interactively and your typed answer is
+   appended to the conversation before calling the model again — up to
    `SRG_MAX_FOLLOWUP_TURNS` times (default 2). If the budget runs out, one
    final call forces a best-effort response with `[PLACEHOLDER: ...]`
    markers for anything still unaddressed.
@@ -223,6 +349,8 @@ security-response-generator/
 ├── knowledge_base/                  # committed: NIST 800-53 rev5, public refs
 ├── customer_standards/              # gitignored: current engagement's standards
 ├── private_context/                 # gitignored: non-public system details
+├── example_files/                   # committed: per-jurisdiction starter material
+│   └── Federal/ VA/ PA/ CA/ MD/ HI/ #   (copy into customer_standards/ per engagement)
 ├── src/security_response_generator/
 │   ├── cli.py                       # `srg ingest` / `srg generate`
 │   ├── config.py                    # models, paths, chunking, top-k (env-overridable)
@@ -240,8 +368,9 @@ security-response-generator/
   desktop app, then retry.
 - **`srg generate` refuses every control ID**: run `srg ingest` first — the
   NIST baseline collection is empty until `knowledge_base/` is ingested.
-- **Model pull is slow/fails**: `gemma4:e4b` is a ~9.6GB download; check
-  disk space and network connectivity.
+- **Model pull is slow/fails**: `llama3.1:8b` is a ~4.9GB download (see
+  [Choosing a generation model](#choosing-a-generation-model) for smaller
+  or larger alternatives); check disk space and network connectivity.
 - **Responses are much slower than expected**: run `ollama ps` to check
   whether the model is fully on GPU or partially spilled to system RAM/CPU
   (Ollama does this automatically and silently if VRAM is tight, and it's a
@@ -266,7 +395,13 @@ security-response-generator/
   contents never get committed, even though the underlying customer
   documents may themselves be public.
 - All embedding and generation happens through the locally running Ollama
-  daemon. No document or promt content is sent outside the local machine.
+  daemon by default. No document or prompt content is sent outside the
+  local machine, with one deliberate exception -- see
+  [Using a customer-approved cloud gateway](#using-a-customer-approved-cloud-gateway-eg-aws-bedrock)
+  for when a customer-approved gateway like AWS Bedrock is a reasonable fit
+  and what it would take.
+- `start.sh` launches Ollama with `OLLAMA_NO_CLOUD=1` to prevent Ollama's
+  own default telemetry/cloud-sync calls.
 
 ## Manual verification
 

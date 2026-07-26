@@ -41,3 +41,47 @@ def test_control_ids_are_tagged():
 def test_empty_text_produces_no_chunks():
     assert chunk_text("", chunk_size=1000, overlap=100) == []
     assert chunk_text("   \n\n  ", chunk_size=1000, overlap=100) == []
+
+
+def test_control_heading_forces_a_new_chunk_even_without_blank_line():
+    # PDF text extraction often runs one control straight into the next with no
+    # blank line between them -- the heading itself must still force a split.
+    text = (
+        "Some closing discussion for the previous control with no blank line "
+        "separating it from what follows.\n"
+        "SI-5 SECURITY ALERTS, ADVISORIES, AND DIRECTIVES\n"
+        "Control: a. Receive system security alerts, advisories, and directives."
+    )
+    chunks = chunk_text(text, chunk_size=1000, overlap=100)
+
+    assert len(chunks) == 2
+    assert chunks[1].text.startswith("SI-5 SECURITY ALERTS")
+
+
+def test_enhancement_heading_forces_a_new_chunk():
+    text = (
+        "Discussion of the base control continues here with no blank line.\n"
+        "(1) AUTOMATED ALERTS AND ADVISORIES\n"
+        "Broadcast security alert and advisory information throughout the organization."
+    )
+    chunks = chunk_text(text, chunk_size=1000, overlap=100)
+
+    assert len(chunks) == 2
+    assert chunks[1].text.startswith("(1) AUTOMATED ALERTS AND ADVISORIES")
+
+
+def test_heading_boundary_prevents_cross_control_truncation():
+    # Regression test for the real bug: a chunk_size cutoff must never land
+    # mid-control, merging one control's tail with the next control's start.
+    filler = "word " * 200
+    text = (
+        f"(24) SYSTEM MONITORING | INDICATORS OF COMPROMISE\n{filler}\n"
+        f"SI-5 SECURITY ALERTS, ADVISORIES, AND DIRECTIVES\n{filler}"
+    )
+    chunks = chunk_text(text, chunk_size=1200, overlap=100)
+
+    for chunk in chunks:
+        assert not (
+            "INDICATORS OF COMPROMISE" in chunk.text and "SI-5 SECURITY ALERTS" in chunk.text
+        )
+    assert any(chunk.text.startswith("SI-5 SECURITY ALERTS") for chunk in chunks)

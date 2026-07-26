@@ -11,10 +11,11 @@ from security_response_generator import config
 from security_response_generator.generation.formatting import normalize_to_ascii
 from security_response_generator.generation.prompt import (
     FORCED_COMPLETION_INSTRUCTION,
+    RESPONSE_SCHEMA,
     AssembledPrompt,
     OutputFormat,
     assemble_prompt,
-    extract_followup_question,
+    parse_model_reply,
 )
 from security_response_generator.generation.retrieval import retrieve_for_control
 from security_response_generator.ingest import loaders
@@ -188,7 +189,7 @@ def generate(
 def _wait_for_model(messages: list[dict], label: str = "Thinking...") -> str:
     """Call chat_messages with a spinner so a multi-minute wait doesn't look hung."""
     with console.status(label):
-        return chat_messages(messages)
+        return chat_messages(messages, response_format=RESPONSE_SCHEMA)
 
 
 def _run_conversation(prompt: AssembledPrompt) -> str:
@@ -207,18 +208,19 @@ def _run_conversation(prompt: AssembledPrompt) -> str:
     followups_remaining = config.MAX_FOLLOWUP_TURNS
 
     while True:
-        reply = _wait_for_model(messages)
-        question = extract_followup_question(reply)
-        if question is None:
-            return reply
+        raw_reply = _wait_for_model(messages)
+        reply = parse_model_reply(raw_reply)
+        if not reply.needs_info:
+            return reply.response or raw_reply
 
-        messages.append({"role": "assistant", "content": reply})
+        messages.append({"role": "assistant", "content": raw_reply})
 
         if followups_remaining <= 0:
             messages.append({"role": "user", "content": FORCED_COMPLETION_INSTRUCTION})
-            return _wait_for_model(messages, "Wrapping up...")
+            raw_reply = _wait_for_model(messages, "Wrapping up...")
+            return parse_model_reply(raw_reply).response or raw_reply
 
-        typer.echo(f"\n{question}\n")
+        typer.echo(f"\n{reply.question}\n")
         answer = typer.prompt("Your answer")
         messages.append({"role": "user", "content": answer})
         followups_remaining -= 1

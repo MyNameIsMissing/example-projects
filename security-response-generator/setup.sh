@@ -55,13 +55,13 @@ fi
 echo "Checking that the Ollama daemon is running..."
 if ! ollama list >/dev/null 2>&1; then
   echo "Ollama is installed but the daemon doesn't seem to be running."
-  echo "Start it with: ollama serve  (or launch the Ollama desktop app)"
+  echo "Start it with: OLLAMA_NO_CLOUD=1 ollama serve  (or launch the Ollama desktop app)"
   echo "Then re-run: ./setup.sh"
   exit 1
 fi
 
 echo "Pulling models..."
-ollama pull gemma4:e4b
+ollama pull llama3.1:8b
 ollama pull embeddinggemma
 
 # Guard for a fresh clone where the gitignored folders/subfiles don't exist yet
