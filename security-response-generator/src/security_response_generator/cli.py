@@ -7,7 +7,7 @@ import typer
 from rich.console import Console
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn, TimeElapsedColumn
 
-from security_response_generator import config
+from security_response_generator import config, engagements
 from security_response_generator.generation.formatting import normalize_to_ascii
 from security_response_generator.generation.prompt import (
     FORCED_COMPLETION_INSTRUCTION,
@@ -45,36 +45,108 @@ def ingest(
     rebuild: bool = typer.Option(
         False,
         "--rebuild",
-        help="Wipe all collections and the manifest, then re-ingest everything from scratch.",
+        help="Wipe the active engagement's customer/private index before ingesting.",
+    ),
+    rebuild_baseline: bool = typer.Option(
+        False,
+        "--rebuild-baseline",
+        help="Also wipe and re-ingest the shared NIST 800-53 baseline.",
     ),
 ) -> None:
     """Ingest documents from the source folders into the local vector store."""
+    engagement = _active_engagement_or_exit()
     if source == "all":
-        collection_names = list(config.SOURCE_DIRS)
-    elif source in config.SOURCE_DIRS:
+        collection_names = list(config.SOURCE_NAMES)
+    elif source in config.SOURCE_NAMES:
         collection_names = [source]
     else:
         typer.echo(f"Unknown source: {source}", err=True)
         raise typer.Exit(code=1)
 
-    client = get_client()
+    if rebuild and source == config.COLLECTION_KNOWLEDGE_BASE:
+        typer.echo(
+            "--rebuild applies to engagement data; use --rebuild-baseline for knowledge_base.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    if rebuild_baseline and source not in ("all", config.COLLECTION_KNOWLEDGE_BASE):
+        typer.echo(
+            "--rebuild-baseline requires --source all or --source knowledge_base.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
 
+    baseline_client = get_client(config.CHROMA_DIR)
+    engagement_client = get_client(engagement.chroma_dir)
+
+    rebuilt_engagement_source = None
     if rebuild:
-        for name in config.SOURCE_DIRS:
-            client.delete_collection(name=name)
+        engagement_names = (
+            (
+                config.COLLECTION_CUSTOMER_STANDARDS,
+                config.COLLECTION_PRIVATE_CONTEXT,
+            )
+            if source == "all"
+            else (source,)
+        )
+        for name in engagement_names:
+            _delete_collection_if_present(engagement_client, name)
+        if source == "all" and engagement.manifest_path.exists():
+            engagement.manifest_path.unlink()
+        elif source != "all":
+            rebuilt_engagement_source = source
+
+    if rebuild_baseline:
+        _delete_collection_if_present(baseline_client, config.COLLECTION_KNOWLEDGE_BASE)
         if config.MANIFEST_PATH.exists():
             config.MANIFEST_PATH.unlink()
 
-    manifest = manifest_module.load_manifest(config.MANIFEST_PATH)
+    baseline_manifest = manifest_module.load_manifest(config.MANIFEST_PATH)
+    engagement_manifest = manifest_module.load_manifest(engagement.manifest_path)
+    if rebuilt_engagement_source:
+        prefix = f"{rebuilt_engagement_source}/"
+        engagement_manifest = {
+            key: value for key, value in engagement_manifest.items() if not key.startswith(prefix)
+        }
+    source_dirs = _source_dirs(engagement)
 
     for name in collection_names:
-        _ingest_source(client, name, manifest)
+        if name == config.COLLECTION_KNOWLEDGE_BASE:
+            _ingest_source(
+                baseline_client,
+                name,
+                source_dirs[name],
+                baseline_manifest,
+            )
+        else:
+            _ingest_source(
+                engagement_client,
+                name,
+                source_dirs[name],
+                engagement_manifest,
+            )
 
-    manifest_module.save_manifest(config.MANIFEST_PATH, manifest)
+    manifest_module.save_manifest(config.MANIFEST_PATH, baseline_manifest)
+    manifest_module.save_manifest(engagement.manifest_path, engagement_manifest)
+    _show_demo_reminder(engagement)
 
 
-def _ingest_source(client, collection_name: str, manifest: dict) -> None:
-    source_dir = config.SOURCE_DIRS[collection_name]
+def _delete_collection_if_present(client, name: str) -> None:
+    try:
+        client.delete_collection(name=name)
+    except Exception:
+        pass
+
+
+def _source_dirs(engagement: engagements.Engagement) -> dict[str, Path]:
+    return {
+        config.COLLECTION_KNOWLEDGE_BASE: config.KNOWLEDGE_BASE_DIR,
+        config.COLLECTION_CUSTOMER_STANDARDS: engagement.customer_standards_dir,
+        config.COLLECTION_PRIVATE_CONTEXT: engagement.private_context_dir,
+    }
+
+
+def _ingest_source(client, collection_name: str, source_dir: Path, manifest: dict) -> None:
     collection = get_collection(client, collection_name)
     prefix = f"{collection_name}/"
 
@@ -144,8 +216,20 @@ def generate(
     ),
 ) -> None:
     """Generate a security control response grounded in the local knowledge base."""
-    client = get_client()
-    collections = {name: get_collection(client, name) for name in config.SOURCE_DIRS}
+    engagement = _active_engagement_or_exit()
+    baseline_client = get_client(config.CHROMA_DIR)
+    engagement_client = get_client(engagement.chroma_dir)
+    collections = {
+        config.COLLECTION_KNOWLEDGE_BASE: get_collection(
+            baseline_client, config.COLLECTION_KNOWLEDGE_BASE
+        ),
+        config.COLLECTION_CUSTOMER_STANDARDS: get_collection(
+            engagement_client, config.COLLECTION_CUSTOMER_STANDARDS
+        ),
+        config.COLLECTION_PRIVATE_CONTEXT: get_collection(
+            engagement_client, config.COLLECTION_PRIVATE_CONTEXT
+        ),
+    }
 
     result = retrieve_for_control(control_id, context, collections)
 
@@ -172,6 +256,10 @@ def generate(
 
     if output_format == OutputFormat.text:
         response_text = normalize_to_ascii(response_text)
+        customer_label = normalize_to_ascii(engagement.response_customer_name)
+        response_text = f"Customer: {customer_label}\n\n{response_text}"
+    else:
+        response_text = f"# Customer: {engagement.response_customer_name}\n\n{response_text}"
 
     typer.echo()
     typer.echo(response_text)
@@ -180,10 +268,89 @@ def generate(
         target = output
         if target.is_dir():
             extension = "txt" if output_format == OutputFormat.text else "md"
-            target = target / f"{control_id}_{date.today():%Y%m%d}.{extension}"
+            target = target / f"{engagement.slug}_{control_id}_{date.today():%Y%m%d}.{extension}"
         write_encoding = "ascii" if output_format == OutputFormat.text else "utf-8"
         target.write_text(response_text, encoding=write_encoding)
         typer.echo(f"Written to {target}", err=True)
+    _show_demo_reminder(engagement)
+
+
+@app.command("create-engagement")
+def create_engagement_command(
+    name: str = typer.Argument(..., help="Engagement slug, e.g. virginia or acme-health."),
+    customer_name: str = typer.Option(
+        None,
+        "--customer-name",
+        help="Customer name shown on responses (default: title-cased engagement slug).",
+    ),
+) -> None:
+    """Create and activate an isolated customer engagement."""
+    try:
+        engagement = engagements.create_engagement(name, customer_name)
+    except (ValueError, FileExistsError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(f"Created and activated engagement: {engagement.customer_name}")
+    typer.echo(f"\nAdd customer standards files in:\n  {engagement.customer_standards_dir}")
+    typer.echo(f"\nAdd private system context details in:\n  {engagement.private_context_dir}")
+    typer.echo("\nNext:\n  srg ingest")
+
+
+@app.command("use-engagement")
+def use_engagement_command(
+    name: str = typer.Argument(..., help="Existing engagement slug."),
+) -> None:
+    """Select the engagement used by ingest and generate."""
+    try:
+        engagement = engagements.set_active_engagement(name)
+    except (ValueError, FileNotFoundError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Active engagement: {engagement.response_customer_name}")
+
+
+@app.command("list-engagements")
+def list_engagements_command() -> None:
+    """List available engagements and identify the active one."""
+    active = _active_engagement_or_exit()
+    for engagement in engagements.list_engagements():
+        marker = "*" if engagement.slug == active.slug else " "
+        typer.echo(f"{marker} {engagement.slug}: {engagement.response_customer_name}")
+
+
+@app.command("show-engagement")
+def show_engagement_command() -> None:
+    """Show the active engagement and its document locations."""
+    engagement = _active_engagement_or_exit()
+    typer.echo(f"Active engagement: {engagement.response_customer_name} ({engagement.slug})")
+    typer.echo(f"Customer standards: {engagement.customer_standards_dir}")
+    typer.echo(f"Private context: {engagement.private_context_dir}")
+
+
+def _active_engagement_or_exit() -> engagements.Engagement:
+    try:
+        return engagements.active_engagement()
+    except (ValueError, FileNotFoundError, KeyError) as exc:
+        typer.echo(f"Cannot load the active engagement: {exc}", err=True)
+        typer.echo("Run `srg use-engagement demo` or create a new engagement.", err=True)
+        raise typer.Exit(code=1) from exc
+
+
+def _show_demo_reminder(engagement: engagements.Engagement) -> None:
+    if engagement.is_demo:
+        typer.echo(
+            "\nUsing DEMO engagement.\n\n"
+            "To create your first engagement:\n"
+            "  srg create-engagement <governing-state>-<system-name>\n\n"
+            "For example:\n"
+            "  srg create-engagement virginia-SALI\n\n"
+            "If you already created an engagement, list the available engagements:\n"
+            "  srg list-engagements\n\n"
+            "Then activate the one you want to use:\n"
+            "  srg use-engagement <engagement-name>",
+            err=True,
+        )
 
 
 def _wait_for_model(messages: list[dict], label: str = "Thinking...") -> str:

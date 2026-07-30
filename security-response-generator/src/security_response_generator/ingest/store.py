@@ -1,6 +1,7 @@
 """Chroma collection management: one collection per source tier."""
 
 from collections.abc import Callable
+from pathlib import Path
 
 import chromadb
 
@@ -9,9 +10,10 @@ from security_response_generator.ingest.chunking import Chunk
 from security_response_generator.llm.ollama_client import embed_texts
 
 
-def get_client() -> chromadb.ClientAPI:
-    CHROMA_DIR.mkdir(parents=True, exist_ok=True)
-    return chromadb.PersistentClient(path=str(CHROMA_DIR))
+def get_client(path: Path | None = None) -> chromadb.ClientAPI:
+    database_path = path or CHROMA_DIR
+    database_path.mkdir(parents=True, exist_ok=True)
+    return chromadb.PersistentClient(path=str(database_path))
 
 
 def get_collection(client: chromadb.ClientAPI, name: str):
