@@ -137,7 +137,7 @@ right control. That's a model-capability gap, not a retrieval bug. Prefer
 `llama3.1:8b` if your hardware can fit it; treat `phi4-mini` as a
 speed/VRAM tradeoff you're consciously accepting, not a drop-in equivalent.
 
-If you have significantly more VRAM available (roughly 10GB+),
+If you have significantly more VRAM available (roughly 16GB+),
 **[Gemma 4 E4B](https://ollama.com/library/gemma4)** (Google) is also an
 option -- larger and potentially more capable, but multimodal (it bundles
 vision/audio encoders this tool never uses), which adds load-time overhead
@@ -315,12 +315,6 @@ If DEMO is active after you have already created an engagement, run
 `srg list-engagements` and then `srg use-engagement <engagement-name>` to
 select it.
 
-Existing files from older versions that used root-level
-`customer_standards/` and `private_context/` folders are left untouched and
-remain gitignored. After creating the appropriate engagement, copy those
-files into the paths printed by `srg show-engagement`; SRG no longer reads
-the legacy folders.
-
 ## Development
 
 ```bash
@@ -451,7 +445,7 @@ security-response-generator/
   [Using a customer-approved cloud gateway](#using-a-customer-approved-cloud-gateway-eg-aws-bedrock)
   for when a customer-approved gateway like AWS Bedrock is a reasonable fit
   and what it would take.
-- The `srg` launcher starts Ollama with `OLLAMA_NO_CLOUD=1`.
+- The `srg` launcher starts Ollama with `OLLAMA_NO_CLOUD=1` which turns off telemetry.
 
 ## Manual verification
 
