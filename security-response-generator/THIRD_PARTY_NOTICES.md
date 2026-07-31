@@ -22,16 +22,22 @@ not covered by this project's MIT License.
 Users are responsible for reviewing and complying with these terms before
 downloading or using the models.
 
-## NIST SP 800-53 Revision 5
+## NIST SP 800-53 Release 5.2.0
 
 File:
-[`knowledge_base/NIST.SP.800-53r5.pdf`](knowledge_base/NIST.SP.800-53r5.pdf)
+[`knowledge_base/NIST.SP.800-53-oscal.md`](knowledge_base/NIST.SP.800-53-oscal.md)
 
-Title: *Security and Privacy Controls for Information Systems and
-Organizations*, NIST Special Publication 800-53, Revision 5, Joint Task Force,
-September 2020, including updates as of December 10, 2020.
+The included file is an SRG-generated Markdown representation of the SP
+800-53 control statements, organization-defined parameters, guidance, and
+related-control references in NIST's electronic OSCAL catalog, version 5.2.0.
+The SP 800-53A assessment procedures bundled in the source catalog are not
+included in the generated file.
 
-Official source: <https://doi.org/10.6028/NIST.SP.800-53r5>
+Official source:
+<https://github.com/usnistgov/oscal-content/blob/v1.4.0/nist.gov/SP800-53/rev5/json/NIST_SP-800-53_rev5_catalog.json>
+
+NIST release announcement:
+<https://csrc.nist.gov/news/2025/nist-releases-revision-to-sp-800-53-controls>
 
 NIST states that this publication is not subject to copyright in the United
 States and requests attribution. NIST also publishes terms addressing reuse

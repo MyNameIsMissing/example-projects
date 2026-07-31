@@ -44,6 +44,47 @@ def _patch_common(
     monkeypatch.setattr(cli, "chat_messages", lambda messages, response_format=None: chat_return)
 
 
+def test_update_nist_converts_catalog_and_prints_ingest_next_step(monkeypatch, tmp_path):
+    output = tmp_path / "catalog.md"
+    conversion = cli.nist_oscal.ConversionResult(
+        markdown="converted",
+        version="5.2.0",
+        control_count=324,
+        enhancement_count=872,
+        source_sha256="abc123",
+    )
+    captured = {}
+
+    def fake_update(source, destination):
+        captured["args"] = (source, destination)
+        return conversion
+
+    monkeypatch.setattr(cli.nist_oscal, "update_catalog", fake_update)
+
+    result = runner.invoke(
+        cli.app,
+        ["update-nist", "--source", "catalog.json", "--output", str(output)],
+    )
+
+    assert result.exit_code == 0
+    assert captured["args"] == ("catalog.json", output)
+    assert "NIST SP 800-53 5.2.0" in result.output
+    assert "324 controls and 872 enhancements" in result.output
+    assert "srg ingest --source knowledge_base" in result.output
+
+
+def test_update_nist_reports_catalog_error(monkeypatch):
+    def fail(*args):
+        raise cli.nist_oscal.CatalogError("bad catalog")
+
+    monkeypatch.setattr(cli.nist_oscal, "update_catalog", fail)
+
+    result = runner.invoke(cli.app, ["update-nist", "--source", "bad.json"])
+
+    assert result.exit_code == 1
+    assert "Unable to update the NIST catalog: bad catalog" in result.output
+
+
 def test_generate_refuses_when_no_baseline_match(monkeypatch):
     result_obj = RetrievalResult(
         customer_chunks=[], baseline_chunks=[], private_chunks=[], baseline_exact_match=False

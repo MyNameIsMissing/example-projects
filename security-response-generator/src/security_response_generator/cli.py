@@ -18,7 +18,7 @@ from security_response_generator.generation.prompt import (
     parse_model_reply,
 )
 from security_response_generator.generation.retrieval import retrieve_for_control
-from security_response_generator.ingest import loaders
+from security_response_generator.ingest import loaders, nist_oscal
 from security_response_generator.ingest import manifest as manifest_module
 from security_response_generator.ingest.chunking import chunk_text
 from security_response_generator.ingest.store import (
@@ -31,6 +31,35 @@ from security_response_generator.llm.ollama_client import chat_messages
 
 app = typer.Typer(help="Local RAG CLI for drafting security control responses.")
 console = Console(stderr=True)
+
+
+@app.command("update-nist")
+def update_nist(
+    source: str = typer.Option(
+        nist_oscal.DEFAULT_NIST_OSCAL_URL,
+        "--source",
+        help="Official HTTPS URL or local path to a NIST SP 800-53 OSCAL JSON catalog.",
+    ),
+    output: Path = typer.Option(
+        config.NIST_CATALOG_PATH,
+        "--output",
+        help="Markdown destination used by SRG's knowledge-base ingest.",
+    ),
+) -> None:
+    """Download and convert a NIST SP 800-53 OSCAL catalog for local ingest."""
+    try:
+        result = nist_oscal.update_catalog(source, output)
+    except nist_oscal.CatalogError as exc:
+        typer.echo(f"Unable to update the NIST catalog: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(
+        f"Wrote NIST SP 800-53 {result.version} to {output}\n"
+        f"Converted {result.control_count} controls and "
+        f"{result.enhancement_count} enhancements.\n\n"
+        "Next:\n"
+        "  srg ingest --source knowledge_base"
+    )
 
 
 @app.command()

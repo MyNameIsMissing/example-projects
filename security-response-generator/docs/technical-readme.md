@@ -1,6 +1,6 @@
 # Security Response Generator
 
-A local, offline CLI that drafts security control responses (e.g.
+A local-first CLI that drafts security control responses (e.g.
 NIST 800-53 controls like "SI-5") for a compliance assessor to review, using
 retrieval-augmented generation (RAG) grounded in three tiers of source
 material. Output can be Markdown or plain ASCII text, depending on what the
@@ -36,6 +36,8 @@ Chroma product telemetry.
   covered by the supplied context, up to a configurable round limit, with a
   best-effort placeholder-annotated response if the model still isn't done
 - Incremental ingestion — only re-embeds files that changed
+- Reproducible download and conversion of official NIST SP 800-53 OSCAL
+  catalogs into chunker-compatible Markdown
 - Isolated customer engagements with a shared NIST 800-53 baseline, so
   switching customers never requires deleting or replacing another
   customer's files
@@ -48,7 +50,10 @@ Chroma product telemetry.
 
 ## Caveats
 
-- The ingest processor is VERY tailored to the existing NIST SP 800-53 rev 5 PDF content included in this project.  If you replace that file with different but similar content, perhaps due to an update by NIST, or using a customer proprietery catalog, the assistant may not properly track control ID content vs ancillary content (Appendix C, etc.), resulting in significant deviation from the anticipated response output.  
+- The ingest and retrieval processors remain tailored to NIST SP 800-53
+  control IDs and heading structure. Use `srg update-nist` for official OSCAL
+  updates; dropping in an arbitrary catalog or generic JSON-to-Markdown
+  conversion may not preserve reliable control boundaries.
 
 ## Technology Stack
 
@@ -94,7 +99,7 @@ Chroma product telemetry.
    environment directly, so it does not need to be activated.
 
    A built-in `demo` engagement is active initially. It uses the included
-   NIST SP 800-53 rev5 PDF, fictional private system context, and no
+   NIST SP 800-53 Release 5.2.0 catalog, fictional private system context, and no
    customer-specific standards.
 
    If `~/.local/bin` is not already on your `PATH`, setup prints the exact
@@ -223,7 +228,7 @@ when necessary and then runs the command from this project's virtual
 environment. This means `srg` works from any directory after setup.
 
 1. **Add source material**:
-   - The supported NIST SP 800-53 rev5 catalog is already included in
+   - The supported NIST SP 800-53 Release 5.2.0 catalog is already included in
      `knowledge_base/`. This project intentionally does not support switching
      to ISO, PCI DSS, or another control catalog.
    - On a fresh installation, the active `demo` engagement already contains
@@ -240,7 +245,30 @@ environment. This means `srg` works from any directory after setup.
      Use `--customer-name "State of Northbridge"` when the response label
      should be more formal than the title-cased folder name.
 
-2. **Ingest**:
+2. **Update the NIST catalog when needed**:
+   ```bash
+   srg update-nist
+   ```
+   By default, this downloads the official NIST OSCAL JSON catalog from the
+   fixed `oscal-content` release tag `v1.4.0`, which contains SP 800-53
+   Release 5.2.0. The source is intentionally pinned rather than resolved as
+   "latest" so the same SRG version does not silently begin ingesting
+   different regulatory content and so the generated baseline remains
+   reproducible. The command validates the catalog metadata and atomically
+   regenerates `knowledge_base/NIST.SP.800-53-oscal.md`. It records the source
+   URL, catalog version, last-modified value, and source SHA-256 digest in
+   the output. The converter emits headings compatible with exact control
+   retrieval, resolves OSCAL organization-defined parameter references into
+   readable placeholders, and includes SP 800-53 statements and guidance.
+   SP 800-53A assessment objectives and methods bundled in the source OSCAL
+   catalog are intentionally excluded.
+
+   Updating to a future official release is therefore an explicit action:
+   pass its HTTPS URL or a downloaded local copy with `--source`.
+   `--output` selects a different Markdown destination. The command does not
+   require Ollama and does not ingest or embed the result automatically.
+
+3. **Ingest**:
    ```bash
    srg ingest
    ```
@@ -252,7 +280,7 @@ environment. This means `srg` works from any directory after setup.
    the deliberately explicit `--rebuild-baseline` option.
    Large files show a progress bar on stderr as embedding batches complete, so a long ingest doesn't look stalled.
 
-3. **Generate a response**:
+4. **Generate a response**:
    ```bash
    srg generate "SI-5" --context "our environment uses a SaaS SIEM for continuous monitoring"
    ```
@@ -338,7 +366,11 @@ manually — see the "Manual verification" section below.
 
 ## How It Works
 
-1. **Ingest**: documents are loaded (`.pdf` via `pypdf`, `.md`/`.txt`
+1. **Prepare the NIST baseline**: `srg update-nist` downloads or reads an
+   OSCAL JSON catalog and converts only its SP 800-53 control material into
+   deterministic, ingest-ready Markdown. This optional update operation is
+   separate from ingest and is the only networked NIST step.
+2. **Ingest**: documents are loaded (`.pdf` via `pypdf`, `.md`/`.txt`
    directly), split into ~800-token chunks with overlap (splitting on
    headers/paragraphs where possible), tagged with any control IDs found
    in the text, embedded via EmbeddingGemma, and stored in one of three
@@ -346,16 +378,16 @@ manually — see the "Manual verification" section below.
    `customer_standards` and `private_context` live in the active
    engagement's isolated database. Separate manifests make re-ingestion
    incremental.
-2. **Retrieve**: for a given control ID and freeform notes, each collection
+3. **Retrieve**: for a given control ID and freeform notes, each collection
    is queried twice — once filtered to chunks whose text contains the
    control ID, once by semantic similarity — and the results are merged,
    with `customer_standards` and `private_context` given protected
    top-k slots so they aren't drowned out by the much larger NIST corpus.
-3. **Refuse or caveat**: if the NIST baseline has no match for the control
+4. **Refuse or caveat**: if the NIST baseline has no match for the control
    ID, the tool refuses and exits non-zero rather than guessing. If the
    baseline matches but no customer/state standard does, generation
    proceeds but the model is instructed to say so explicitly.
-4. **Generate**: retrieved chunks (labeled by tier), the control ID, and
+5. **Generate**: retrieved chunks (labeled by tier), the control ID, and
    the analyst's notes are assembled into a prompt alongside
    `prompts/instructions.md` (editable — controls tone, structure, and the
    authoritative-standards rule) and a format-specific instruction (Markdown
@@ -365,19 +397,19 @@ manually — see the "Manual verification" section below.
    The model is asked for a JSON-schema-constrained reply (`needs_info`,
    `question`, `response`) rather than free-form text, so the follow-up
    mechanism below works reliably regardless of which model is configured.
-5. **Follow up if needed**: if the reply has `needs_info: true`, its
+6. **Follow up if needed**: if the reply has `needs_info: true`, its
    `question` is shown to you interactively and your typed answer is
    appended to the conversation before calling the model again — up to
    `SRG_MAX_FOLLOWUP_TURNS` times (default 2). If the budget runs out, one
    final call forces a best-effort response with `[PLACEHOLDER: ...]`
    markers for anything still unaddressed.
-6. **Normalize (text format only)**: if `--format text` was requested, the
+7. **Normalize (text format only)**: if `--format text` was requested, the
    raw model output is run through `generation/formatting.py`, which
    converts smart quotes/em-dashes/bullets to ASCII equivalents, strips any
    leftover Markdown syntax, and drops any remaining non-ASCII characters —
    a code-level guarantee independent of how well the model followed the
    prompt instruction.
-7. **Output**: the response is printed to stdout and optionally written to
+8. **Output**: the response is printed to stdout and optionally written to
    a file.
 
 ## File Structure
@@ -401,7 +433,7 @@ security-response-generator/
 ├── example_files/                   # committed: per-jurisdiction starter material
 │   └── Federal/ VA/ PA/ CA/ MD/ HI/ # copy into an engagement as applicable
 ├── src/security_response_generator/
-│   ├── cli.py                       # `srg ingest` / `srg generate`
+│   ├── cli.py                       # update, ingest, engagement, and generation commands
 │   ├── config.py                    # models, paths, chunking, top-k (env-overridable)
 │   ├── ingest/                      # loaders, chunking, manifest, Chroma store
 │   ├── generation/                  # retrieval, prompt assembly, ASCII normalizer
@@ -429,7 +461,7 @@ security-response-generator/
   common source of unexplained slowness). Lowering context length or closing
   other GPU-heavy applications usually resolves it.
 - **`srg ingest` fails with `ResponseError: ... EOF` on a large document**
-  (e.g. the full NIST 800-53 rev5 catalog, ~490 pages): this is the
+  (e.g. the full NIST 800-53 catalog): this is the
   embedding model's runner subprocess getting OOM-killed — check Ollama's
   own log (`journalctl -u ollama`, or the terminal running `ollama serve`
   if you started it manually) for a `signal: killed` line to confirm.
@@ -455,6 +487,10 @@ security-response-generator/
   with `OLLAMA_NO_CLOUD=1`.
 - Chroma is created with `anonymized_telemetry=False`, disabling its product
   telemetry.
+- `srg update-nist` is an explicit exception to otherwise local document
+  processing: it connects to the configured HTTPS OSCAL source and writes
+  only the converted catalog to the selected output path. It does not send
+  customer standards, private context, prompts, or generated responses.
 - The cloud-gateway discussion above describes a possible future feature.
   The current implementation has no cloud generation provider.
 
