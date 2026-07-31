@@ -249,20 +249,24 @@ environment. This means `srg` works from any directory after setup.
    ```bash
    srg update-nist
    ```
-   This downloads the pinned official NIST OSCAL JSON catalog over HTTPS,
-   validates its catalog metadata, and atomically regenerates
-   `knowledge_base/NIST.SP.800-53-oscal.md`. It records the source URL,
-   catalog version, last-modified value, and source SHA-256 digest in the
-   output. The converter emits headings compatible with exact control
+   By default, this downloads the official NIST OSCAL JSON catalog from the
+   fixed `oscal-content` release tag `v1.4.0`, which contains SP 800-53
+   Release 5.2.0. The source is intentionally pinned rather than resolved as
+   "latest" so the same SRG version does not silently begin ingesting
+   different regulatory content and so the generated baseline remains
+   reproducible. The command validates the catalog metadata and atomically
+   regenerates `knowledge_base/NIST.SP.800-53-oscal.md`. It records the source
+   URL, catalog version, last-modified value, and source SHA-256 digest in
+   the output. The converter emits headings compatible with exact control
    retrieval, resolves OSCAL organization-defined parameter references into
    readable placeholders, and includes SP 800-53 statements and guidance.
    SP 800-53A assessment objectives and methods bundled in the source OSCAL
    catalog are intentionally excluded.
 
-   For a future official release or an offline copy, pass an HTTPS URL or
-   local path with `--source`. `--output` selects a different Markdown
-   destination. The command does not require Ollama and does not ingest or
-   embed the result automatically.
+   Updating to a future official release is therefore an explicit action:
+   pass its HTTPS URL or a downloaded local copy with `--source`.
+   `--output` selects a different Markdown destination. The command does not
+   require Ollama and does not ingest or embed the result automatically.
 
 3. **Ingest**:
    ```bash
