@@ -11,15 +11,24 @@ __pycache__/
 # Chroma persistence + ingestion manifest (local, regenerable via `srg ingest`)
 chroma_db/
 
-# Customer-specific and system-specific material: never committed, even though
-# the underlying source documents may themselves be public
-customer_standards/*
-!customer_standards/README.md
-!customer_standards/.gitkeep
+# Engagement data is local and may contain sensitive customer information.
+engagements/*
+!engagements/demo/
+engagements/demo/*
+!engagements/demo/engagement.json
+!engagements/demo/customer_standards/
+!engagements/demo/customer_standards/.gitkeep
+!engagements/demo/private_context/
+!engagements/demo/private_context/demo-system.md
+engagements/*/chroma_db/
+engagements/*/responses/
 
-private_context/*
-!private_context/README.md
-!private_context/.gitkeep
+# Local active-engagement selection
+.srg/
+
+# Legacy pre-engagement locations may still contain sensitive user files.
+/customer_standards/
+/private_context/
 
 # Env / secrets
 .env

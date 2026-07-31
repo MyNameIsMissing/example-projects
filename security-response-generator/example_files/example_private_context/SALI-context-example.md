@@ -1,40 +1,85 @@
 # SALI
 
-The SALI system is a Node and Python based system running in Microsoft Azure kubernetes containers.  It is run by the Department of Labor in the State of Virginia.
+SALI (Service Authorization and Licensing Interface) is an entirely
+fictional system operated by the fictional Northbridge Department of
+Professional Services. It does not describe a real organization, customer,
+system, or production environment.
+
+SALI is a Python and JavaScript application running in managed containers
+with a managed relational database and object storage.
 
 ## Monitoring
 
-The SALI system uses native Azure monitoring and alerting tools in addition to Splunk for log aggregations and analysis and NewRelic for APM.
+SALI uses its hosting provider's native infrastructure monitoring and
+alerting tools. Application, identity, container, database, and platform
+audit logs are forwarded to Northbridge Central Monitor, a fictional SIEM.
+A separate fictional application-performance service collects transaction
+traces and service-health metrics.
+
+The security team reviews critical alerts continuously and lower-priority
+alerts each business day. Security advisories are reviewed within one
+business day and assigned to the SALI product owner for impact analysis.
 
 ## Web attack prevention
 
-The SALI web app is fronted by a container running Nginx as a reverse proxy.  WAF ruls such as XSS and IP blocks are implemented directly at the Nginx layer by a module running the OWASP Core Rule Set and custom rules created by the SALI engineers.  A small number of defense mechanisms are enabled directly at the web app later.  
+The SALI web application is fronted by a managed load balancer and web
+application firewall. The firewall uses the OWASP Core Rule Set plus
+application-specific rules maintained by the platform team. Rate limiting,
+input validation, and file-upload restrictions are also enforced in the
+application.
 
-There is no dedicated application layer DDoS prevention layer such as Cloudflare.  The Microsoft Azure cloud networking load balancers natively provide IP layer DDoS prevention such as against syn ack attacks, but Micosoft fully controls those features with no ability for SALI to make adjustments.
+The hosting provider supplies network-layer denial-of-service protection.
+The SALI team can adjust application rate limits and firewall rules but
+cannot alter the provider's underlying network controls.
 
 ## General architecture
 
-- tbd
+- Public users access SALI through a browser-based licensing portal.
+- Application services run in managed containers across two availability
+  zones.
+- A managed relational database stores licensing and workflow records.
+- Uploaded supporting documents are stored in encrypted object storage.
+- Development, test, and production use separate accounts and credentials.
 
 ## Identity, Authentication, and Access
 
-- tbd
+- Public users authenticate through Northbridge Citizen Login, a fictional
+  identity service.
+- Workforce users authenticate through the fictional Northbridge Workforce
+  Identity service using multifactor authentication.
+- Administrative access requires a separate privileged role.
+- Access is reviewed quarterly and when personnel change roles.
 
 ## Organizational Structure and Separation of Duties
 
-- tbd
+- The product owner approves production access and accepts system risk.
+- The application team develops and maintains SALI.
+- The platform team administers container, database, and storage services.
+- The security team monitors alerts and investigates incidents.
+- Developers cannot approve their own production deployments.
+- Audit administrators cannot modify licensing records.
 
 ## Least Functionality Posture
 
-- deny by default, allow by exception
-- tbd
+- Access is denied by default and allowed only by documented exception.
+- Only approved ports, services, packages, and container images are
+  permitted in production.
+- Administrative interfaces are restricted to the management network.
+- Exceptions require approval, a business justification, and an expiration
+  date.
 
 ## Canonical Decisions and Definitions
 
-- Sensitive data above class 2 is not allowed in the SALI system
+- SALI may store fictional moderate-impact licensing information.
+- Payment-card data is handled by a separate fictional payment provider and
+  is not stored in SALI.
+- The security team owns alert triage; the application team owns remediation.
 
 ## Completed Control Response example outlines
 
-- IA-2 - Identification & Authentication: Login.gov (users), Okta → IAM Identity Center (engineers), MFA everywhere, no SMS, RBAC, Okta federation to Enterprise SaaS.
-- AC-5 - Separation of Duties: four-category mapping, admin/audit segregation (OSM/SOC for Azure; broader engineering staff for Node/Python), role-assumption rather than seperate accounts.
-- tbd
+- IA-2 - Identification and Authentication: separate fictional identity
+  services for public and workforce users, multifactor authentication for
+  workforce access, and role-based authorization.
+- AC-5 - Separation of Duties: product, development, platform, and security
+  responsibilities are separated, including deployment approval and audit
+  administration.

@@ -2,6 +2,22 @@ from security_response_generator.ingest import store
 from security_response_generator.ingest.chunking import Chunk
 
 
+def test_get_client_disables_chroma_telemetry(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_persistent_client(*, path, settings):
+        captured["path"] = path
+        captured["settings"] = settings
+        return object()
+
+    monkeypatch.setattr(store.chromadb, "PersistentClient", fake_persistent_client)
+
+    store.get_client(tmp_path / "chroma")
+
+    assert captured["path"] == str(tmp_path / "chroma")
+    assert captured["settings"].anonymized_telemetry is False
+
+
 class _FakeCollection:
     def __init__(self):
         self.upserted = None

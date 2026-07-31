@@ -1,8 +1,8 @@
 # example_files/
 
-Reference/starter material per jurisdiction, to make it faster to set up
-`customer_standards/` for a new engagement. Each subfolder is a jurisdiction
-you might be working with:
+Reference/starter material per jurisdiction, to make it faster to populate a
+new engagement's `customer_standards/` folder. Each subfolder is a
+jurisdiction you might be working with:
 
 ```
 example_files/
@@ -15,18 +15,21 @@ example_files/
 └── HI/
 ```
 
-This folder is committed to the repo — unlike `customer_standards/`, nothing
-here is tied to one specific customer engagement, and all information is fully public, so it's meant to be shared reference material rather than gitignored.
+This folder is committed to the repo. Unlike the customer folders under
+`engagements/`, nothing here is tied to one specific engagement, and all
+information is fully public.
 
 ## How to use this when starting a new engagement
 
-1. Find the subfolder matching your customer's jurisdiction.
-2. Read the subfolder's `README.md` for customer context.
-3. Copy (not move) whatever's relevant into `../customer_standards/`.
-4. Adjust/trim as needed for the specific engagement — `customer_standards/`
+1. Create the engagement, for example `srg create-engagement virginia`.
+2. Find the subfolder matching your customer's jurisdiction.
+3. Read the subfolder's `README.md` for customer context.
+4. Copy (not move) relevant files into the `customer_standards/` path printed
+   by `create-engagement`.
+5. Adjust/trim as needed for the specific engagement — its standards folder
    should reflect what's actually true for *this* customer, not just a
    generic copy of the jurisdiction's example material.
-5. Run `srg ingest --rebuild` from the project root.
+6. Run `srg ingest` from any directory.
 
 Each jurisdiction subfolder has its own `README.md` stub (Folder Name /
 Included Files / Useful Links) to be filled in as that jurisdiction's

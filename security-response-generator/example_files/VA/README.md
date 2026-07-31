@@ -1,12 +1,13 @@
 # VA
 
-Virginia has a robust public set of policy and standards documents.  Their NIST SP 800-53 rev 5 standards are covered in SEC530.   
-Several other policies and standards exist at the link provded below.  
+Virginia publishes information security policies and standards through the
+Virginia Information Technologies Agency. Use the official source linked
+below to obtain current documents.
 
 ## Included Files
 
-- SEC530_Information_Security_Standard.pdf
+None.
 
 ## Useful Links
 
-- https://www.vita.virginia.gov/it-governance/itrm-policies-standards/
+- https://www.vita.virginia.gov/policy--governance/governance/policies-standards--guidelines/

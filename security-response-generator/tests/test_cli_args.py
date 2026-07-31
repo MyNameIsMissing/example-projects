@@ -28,7 +28,13 @@ def _baseline_chunk(chunk_id: str = "doc.md::0") -> RetrievedChunk:
 def _patch_common(
     monkeypatch, retrieval_result: RetrievalResult, chat_return: str = "response text"
 ):
-    monkeypatch.setattr(cli, "get_client", lambda: object())
+    demo = cli.engagements.Engagement(
+        "demo",
+        "DEMO",
+        cli.config.ENGAGEMENTS_DIR / "demo",
+    )
+    monkeypatch.setattr(cli, "_active_engagement_or_exit", lambda: demo)
+    monkeypatch.setattr(cli, "get_client", lambda path=None: object())
     monkeypatch.setattr(cli, "get_collection", lambda client, name: object())
     monkeypatch.setattr(
         cli,
@@ -94,7 +100,7 @@ def test_generate_prints_response_and_writes_output_file(monkeypatch, tmp_path):
 
     assert result.exit_code == 0
     assert "Generated response" in result.stdout
-    assert output_file.read_text() == "# SI-5\nGenerated response"
+    assert output_file.read_text() == "# Customer: DEMO\n\n# SI-5\nGenerated response"
 
 
 def test_generate_without_output_flag_does_not_require_file(monkeypatch):
@@ -124,6 +130,7 @@ def test_generate_text_format_normalizes_output(monkeypatch):
     result = runner.invoke(cli.app, ["generate", "SI-5", "--format", "text"])
 
     assert result.exit_code == 0
+    assert "Customer: DEMO" in result.stdout
     assert "SI-5" in result.stdout
     assert '"Quoted" response - done.' in result.stdout
     assert "#" not in result.stdout
@@ -142,8 +149,31 @@ def test_generate_markdown_format_is_default_and_unmodified(monkeypatch):
     result = runner.invoke(cli.app, ["generate", "SI-5"])
 
     assert result.exit_code == 0
+    assert "# Customer: DEMO" in result.stdout
     assert "## SI-5" in result.stdout
     assert "“Quoted”" in result.stdout
+
+
+def test_generate_labels_customer_engagement_in_plain_ascii_without_uppercasing(
+    monkeypatch, tmp_path
+):
+    result_obj = RetrievalResult(
+        customer_chunks=[],
+        baseline_chunks=[_baseline_chunk()],
+        private_chunks=[],
+        baseline_exact_match=True,
+    )
+    _patch_common(monkeypatch, result_obj, chat_return="Normal sentence capitalization.")
+    engagement = cli.engagements.Engagement("acme-health", "Acme Héalth", tmp_path)
+    monkeypatch.setattr(cli, "_active_engagement_or_exit", lambda: engagement)
+
+    result = runner.invoke(cli.app, ["generate", "SI-5", "--format", "text"])
+
+    assert result.exit_code == 0
+    assert "Customer: Acme Health" in result.stdout
+    assert "Normal sentence capitalization." in result.stdout
+    assert "NORMAL SENTENCE CAPITALIZATION" not in result.stdout
+    assert all(ord(character) < 128 for character in result.stdout)
 
 
 def test_generate_text_format_default_output_filename_uses_txt_extension(monkeypatch, tmp_path):
@@ -158,7 +188,7 @@ def test_generate_text_format_default_output_filename_uses_txt_extension(monkeyp
     result = runner.invoke(cli.app, ["generate", "SI-5", "--format", "text", "-o", str(tmp_path)])
 
     assert result.exit_code == 0
-    written_files = list(tmp_path.glob("SI-5_*.txt"))
+    written_files = list(tmp_path.glob("demo_SI-5_*.txt"))
     assert len(written_files) == 1
 
 
@@ -174,7 +204,7 @@ def test_generate_markdown_format_default_output_filename_uses_md_extension(monk
     result = runner.invoke(cli.app, ["generate", "SI-5", "-o", str(tmp_path)])
 
     assert result.exit_code == 0
-    written_files = list(tmp_path.glob("SI-5_*.md"))
+    written_files = list(tmp_path.glob("demo_SI-5_*.md"))
     assert len(written_files) == 1
 
 
@@ -289,26 +319,113 @@ def test_ingest_rejects_unknown_source():
 
 def test_ingest_all_calls_ingest_source_for_each_collection(monkeypatch, tmp_path):
     calls = []
-    monkeypatch.setattr(cli, "get_client", lambda: object())
-    monkeypatch.setattr(cli, "_ingest_source", lambda client, name, manifest: calls.append(name))
+    engagement = cli.engagements.Engagement("test", "Test", tmp_path / "test")
+    monkeypatch.setattr(cli, "_active_engagement_or_exit", lambda: engagement)
+    monkeypatch.setattr(cli, "get_client", lambda path=None: object())
+    monkeypatch.setattr(
+        cli,
+        "_ingest_source",
+        lambda client, name, source_dir, manifest: calls.append(name),
+    )
     monkeypatch.setattr(cli.config, "MANIFEST_PATH", tmp_path / "manifest.json")
 
     result = runner.invoke(cli.app, ["ingest"])
 
     assert result.exit_code == 0
-    assert set(calls) == set(cli.config.SOURCE_DIRS)
+    assert set(calls) == set(cli.config.SOURCE_NAMES)
 
 
 def test_ingest_single_source_only_calls_that_collection(monkeypatch, tmp_path):
     calls = []
-    monkeypatch.setattr(cli, "get_client", lambda: object())
-    monkeypatch.setattr(cli, "_ingest_source", lambda client, name, manifest: calls.append(name))
+    engagement = cli.engagements.Engagement("test", "Test", tmp_path / "test")
+    monkeypatch.setattr(cli, "_active_engagement_or_exit", lambda: engagement)
+    monkeypatch.setattr(cli, "get_client", lambda path=None: object())
+    monkeypatch.setattr(
+        cli,
+        "_ingest_source",
+        lambda client, name, source_dir, manifest: calls.append(name),
+    )
     monkeypatch.setattr(cli.config, "MANIFEST_PATH", tmp_path / "manifest.json")
 
     result = runner.invoke(cli.app, ["ingest", "--source", "private_context"])
 
     assert result.exit_code == 0
     assert calls == ["private_context"]
+
+
+def test_ingest_rebuild_rejects_shared_knowledge_base():
+    result = runner.invoke(
+        cli.app,
+        ["ingest", "--source", "knowledge_base", "--rebuild"],
+    )
+
+    assert result.exit_code == 1
+    assert "--rebuild applies to engagement data" in result.output
+
+
+def test_single_source_rebuild_preserves_other_engagement_manifest(monkeypatch, tmp_path):
+    engagement = cli.engagements.Engagement("test", "Test", tmp_path / "test")
+    engagement.chroma_dir.mkdir(parents=True)
+    engagement.manifest_path.write_text(
+        json.dumps(
+            {
+                "customer_standards/old.md": "customer-hash",
+                "private_context/context.md": "private-hash",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    class FakeClient:
+        def delete_collection(self, name):
+            pass
+
+    monkeypatch.setattr(cli, "_active_engagement_or_exit", lambda: engagement)
+    monkeypatch.setattr(cli, "get_client", lambda path=None: FakeClient())
+    monkeypatch.setattr(cli, "_ingest_source", lambda *args: None)
+    monkeypatch.setattr(cli.config, "MANIFEST_PATH", tmp_path / "baseline-manifest.json")
+
+    result = runner.invoke(
+        cli.app,
+        ["ingest", "--source", "customer_standards", "--rebuild"],
+    )
+
+    assert result.exit_code == 0
+    saved = json.loads(engagement.manifest_path.read_text(encoding="utf-8"))
+    assert saved == {"private_context/context.md": "private-hash"}
+
+
+def test_create_engagement_command_reports_document_paths(monkeypatch, tmp_path):
+    engagement = cli.engagements.Engagement("virginia", "Virginia", tmp_path / "virginia")
+    monkeypatch.setattr(
+        cli.engagements,
+        "create_engagement",
+        lambda name, customer_name=None: engagement,
+    )
+
+    result = runner.invoke(cli.app, ["create-engagement", "virginia"])
+
+    assert result.exit_code == 0
+    assert "Created and activated engagement: Virginia" in result.output
+    assert "Add customer standards files in:" in result.output
+    assert "Add private system context details in:" in result.output
+    assert str(engagement.customer_standards_dir) in result.output
+    assert str(engagement.private_context_dir) in result.output
+
+
+def test_demo_reminder_explains_engagement_naming(capsys):
+    demo = cli.engagements.Engagement(
+        "demo",
+        "DEMO",
+        cli.config.ENGAGEMENTS_DIR / "demo",
+    )
+    cli._show_demo_reminder(demo)
+
+    output = capsys.readouterr().err
+    assert "srg create-engagement <governing-state>-<system-name>" in output
+    assert "srg create-engagement northbridge-SALI" in output
+    assert "srg list-engagements" in output
+    assert "srg use-engagement <engagement-name>" in output
 
 
 def test_upsert_with_progress_calls_upsert_chunks_with_working_callback(monkeypatch):
