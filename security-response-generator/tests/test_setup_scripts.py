@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -155,4 +156,69 @@ def test_launcher_help_does_not_require_or_probe_ollama(tmp_path):
 
     assert result.returncode == 0, result.stderr
     assert "Generate a security control response" in result.stdout
+    assert not marker.exists()
+
+
+def test_launcher_update_nist_does_not_require_or_probe_ollama(tmp_path):
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    (fake_bin / "srg").symlink_to(LAUNCHER)
+    marker = tmp_path / "ollama-was-called"
+    fake_ollama = fake_bin / "ollama"
+    fake_ollama.write_text(
+        f"#!/usr/bin/env bash\ntouch {marker!s}\nexit 1\n",
+        encoding="utf-8",
+    )
+    fake_ollama.chmod(0o755)
+    catalog = tmp_path / "catalog.json"
+    catalog.write_text(
+        json.dumps(
+            {
+                "catalog": {
+                    "metadata": {
+                        "title": "NIST SP 800-53 test catalog",
+                        "version": "test",
+                    },
+                    "groups": [
+                        {
+                            "controls": [
+                                {
+                                    "id": "si-5",
+                                    "title": "Security Alerts",
+                                    "parts": [
+                                        {
+                                            "name": "statement",
+                                            "prose": "Receive security alerts.",
+                                        }
+                                    ],
+                                }
+                            ]
+                        }
+                    ],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "catalog.md"
+    env = {**os.environ, "PATH": f"{fake_bin}:{os.environ['PATH']}"}
+
+    result = subprocess.run(
+        [
+            str(fake_bin / "srg"),
+            "update-nist",
+            "--source",
+            str(catalog),
+            "--output",
+            str(output),
+        ],
+        cwd=tmp_path,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert output.exists()
     assert not marker.exists()

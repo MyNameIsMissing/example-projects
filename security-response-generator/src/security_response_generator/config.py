@@ -8,7 +8,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 GENERATION_MODEL = os.environ.get("SRG_GEN_MODEL", "llama3.1:8b")
 EMBEDDING_MODEL = os.environ.get("SRG_EMBED_MODEL", "embeddinggemma")
 
-# A large source document (e.g. the ~490-page NIST 800-53 rev5 catalog) can
+# A large source document (e.g. the full NIST 800-53 catalog) can
 # chunk into hundreds of pieces. Sending them all to Ollama in a single
 # embedding request can OOM-kill the model's runner subprocess, so
 # embed_texts() batches calls at this size instead of sending everything
@@ -19,6 +19,7 @@ CHROMA_DIR = Path(os.environ.get("SRG_CHROMA_DIR", str(PROJECT_ROOT / "chroma_db
 MANIFEST_PATH = CHROMA_DIR / "manifest.json"
 
 KNOWLEDGE_BASE_DIR = PROJECT_ROOT / "knowledge_base"
+NIST_CATALOG_PATH = KNOWLEDGE_BASE_DIR / "NIST.SP.800-53-oscal.md"
 ENGAGEMENTS_DIR = PROJECT_ROOT / "engagements"
 ACTIVE_ENGAGEMENT_PATH = PROJECT_ROOT / ".srg" / "active-engagement"
 

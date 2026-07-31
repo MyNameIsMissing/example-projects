@@ -26,13 +26,17 @@ fi
 # Help is entirely local. Avoid probing or starting Ollama before Typer can
 # render it, including for subcommand help such as `srg generate --help`.
 SHOWING_HELP=false
+NEEDS_OLLAMA=true
 for arg in "$@"; do
   case "$arg" in
     -h|--help) SHOWING_HELP=true ;;
   esac
 done
+if [ "${1:-}" = "update-nist" ]; then
+  NEEDS_OLLAMA=false
+fi
 
-if [ "$SHOWING_HELP" = false ]; then
+if [ "$SHOWING_HELP" = false ] && [ "$NEEDS_OLLAMA" = true ]; then
   if ! command -v ollama >/dev/null 2>&1; then
     srg_error "Ollama is not installed. Install it from https://ollama.com/download"
     srg_error "Then rerun: $PROJECT_ROOT/setup.sh"

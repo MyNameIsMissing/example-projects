@@ -1,9 +1,9 @@
 # Security Response Generator
 
 Security Response Generator (`srg`) is a local CLI that drafts NIST SP
-800-53 Rev. 5 control responses from:
+800-53 Release 5.2.0 control responses from:
 
-- The included NIST SP 800-53 Rev. 5 catalog
+- The included NIST SP 800-53 Release 5.2.0 catalog
 - Customer-specific standards
 - Private system context
 - Notes supplied with each request
@@ -68,7 +68,7 @@ Check installation health at any time:
 
 The initial engagement is `DEMO`. It includes:
 
-- The project-level NIST SP 800-53 Rev. 5 PDF
+- The project-level NIST SP 800-53 Release 5.2.0 catalog
 - Fictional private context for `DEMO-ECMS`
 - No customer-specific standards
 
@@ -89,6 +89,29 @@ The response begins with:
 ```text
 Customer: DEMO
 ```
+
+## Update the NIST catalog
+
+SRG includes a reproducible converter for NIST's machine-readable OSCAL
+catalog. To download the currently supported official release and replace the
+local ingest-ready Markdown:
+
+```bash
+srg update-nist
+srg ingest --source knowledge_base
+```
+
+`update-nist` validates the catalog, records its version, source URL, and
+SHA-256 digest in the generated file, and converts control statements,
+organization-defined parameters, guidance, and related-control references
+into the headings expected by SRG's chunker. The source catalog also contains
+SP 800-53A assessment procedures; those are intentionally excluded to keep
+control-response retrieval focused.
+
+For a future official release or a previously downloaded catalog, use
+`--source` with an HTTPS URL or local JSON path. Use `--output` to choose a
+different Markdown destination. This command is the only part of this
+workflow that downloads NIST content; ingest and generation remain local.
 
 ## Create a customer engagement
 
