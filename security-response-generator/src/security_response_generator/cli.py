@@ -344,7 +344,7 @@ def _show_demo_reminder(engagement: engagements.Engagement) -> None:
             "To create your first engagement:\n"
             "  srg create-engagement <governing-state>-<system-name>\n\n"
             "For example:\n"
-            "  srg create-engagement virginia-SALI\n\n"
+            "  srg create-engagement northbridge-SALI\n\n"
             "If you already created an engagement, list the available engagements:\n"
             "  srg list-engagements\n\n"
             "Then activate the one you want to use:\n"

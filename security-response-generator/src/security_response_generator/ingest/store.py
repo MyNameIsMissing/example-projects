@@ -4,6 +4,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import chromadb
+from chromadb.config import Settings
 
 from security_response_generator.config import CHROMA_DIR
 from security_response_generator.ingest.chunking import Chunk
@@ -13,7 +14,10 @@ from security_response_generator.llm.ollama_client import embed_texts
 def get_client(path: Path | None = None) -> chromadb.ClientAPI:
     database_path = path or CHROMA_DIR
     database_path.mkdir(parents=True, exist_ok=True)
-    return chromadb.PersistentClient(path=str(database_path))
+    return chromadb.PersistentClient(
+        path=str(database_path),
+        settings=Settings(anonymized_telemetry=False),
+    )
 
 
 def get_collection(client: chromadb.ClientAPI, name: str):

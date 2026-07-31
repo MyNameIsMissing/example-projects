@@ -61,6 +61,11 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
+if srg_model_is_cloud "$GEN_MODEL" || srg_model_is_cloud "$EMBED_MODEL"; then
+  srg_error "Cloud-tagged Ollama models are not supported. Configure local models only."
+  exit 2
+fi
+
 pass() {
   printf 'PASS  %s\n' "$1"
 }
@@ -206,6 +211,15 @@ srg_start_ollama
 if [ "$SKIP_MODELS" -eq 1 ]; then
   printf '      Model downloads skipped\n'
 else
+  cat <<'EOF'
+      WARNING: Model weights are not included in SRG or covered by its MIT License.
+      Setup downloads separately licensed runtime components into Ollama.
+      Default model terms:
+        Llama 3.1: https://ollama.com/library/llama3.1:8b-text-q3_K_M/blobs/0ba8f0e314b4
+        EmbeddingGemma: https://ai.google.dev/gemma/terms
+EOF
+  printf '      Configured generation model: %s\n' "$GEN_MODEL"
+  printf '      Configured embedding model: %s\n' "$EMBED_MODEL"
   for model in "$GEN_MODEL" "$EMBED_MODEL"; do
     if srg_model_installed "$model"; then
       printf '      %s already installed\n' "$model"

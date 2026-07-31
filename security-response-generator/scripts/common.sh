@@ -6,6 +6,11 @@
 SRG_DEFAULT_GEN_MODEL="llama3.1:8b"
 SRG_DEFAULT_EMBED_MODEL="embeddinggemma"
 
+# Keep every Ollama CLI call on loopback and disable Ollama cloud features
+# for any daemon started by SRG.
+export OLLAMA_HOST="http://127.0.0.1:11434"
+export OLLAMA_NO_CLOUD=1
+
 srg_info() {
   printf '%s\n' "$*"
 }
@@ -19,6 +24,15 @@ srg_python_version_ok() {
     >/dev/null 2>&1
 }
 
+srg_model_is_cloud() {
+  local model
+  model="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  case "$model" in
+    *:cloud|*-cloud) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 srg_ollama_ready() {
   ollama list >/dev/null 2>&1
 }
@@ -30,7 +44,7 @@ srg_start_ollama() {
   fi
 
   srg_info "Starting the Ollama daemon (log: $log_file)..."
-  OLLAMA_NO_CLOUD=1 nohup ollama serve >"$log_file" 2>&1 &
+  nohup ollama serve >"$log_file" 2>&1 &
 
   for _ in {1..20}; do
     if srg_ollama_ready; then

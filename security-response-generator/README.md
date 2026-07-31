@@ -12,6 +12,9 @@ Embeddings and response generation run locally through Ollama. Generated
 responses are labeled with the active customer engagement so customer
 content and output are not easily confused.
 
+SRG connects only to Ollama on the local loopback interface, refuses
+cloud-tagged Ollama models, and disables Chroma product telemetry.
+
 For architecture, configuration, model selection, troubleshooting, and
 implementation details, see the
 [technical README](docs/technical-readme.md).
@@ -23,6 +26,22 @@ implementation details, see the
 - [Ollama](https://ollama.com/download)
 - Approximately 7 GB of available GPU or unified memory for the default
   generation and embedding models
+
+## Supported platforms
+
+SRG has been tested only on Ubuntu 22.04. It is not compatible with native
+Windows, but it can run within WSL2. macOS may be compatible but has not yet
+been tested.
+
+> [!WARNING]
+> The model weights are not included in this source repository and are not
+> covered by its MIT License. With the default model configuration, setup
+> downloads Llama 3.1 and EmbeddingGemma into Ollama's local model storage
+> unless `./setup.sh --skip-models` is used, making them separately licensed
+> runtime components of the installed project. Llama 3.1 is subject to the
+> [Llama 3.1 Community License](https://ollama.com/library/llama3.1%3A8b-text-q3_K_M/blobs/0ba8f0e314b4),
+> and EmbeddingGemma is subject to the
+> [Gemma Terms of Use](https://ai.google.dev/gemma/terms).
 
 ## Install
 
@@ -76,24 +95,24 @@ Customer: DEMO
 Use a name that combines the governing state and system name:
 
 ```bash
-srg create-engagement virginia-SALI
+srg create-engagement northbridge-SALI
 ```
 
 For a more formal response label:
 
 ```bash
-srg create-engagement virginia-SALI \
-  --customer-name "Commonwealth of Virginia"
+srg create-engagement northbridge-SALI \
+  --customer-name "State of Northbridge"
 ```
 
 The command activates the engagement and prints its document locations:
 
 ```text
 Add customer standards files in:
-  .../engagements/virginia-sali/customer_standards
+  .../engagements/northbridge-sali/customer_standards
 
 Add private system context details in:
-  .../engagements/virginia-sali/private_context
+  .../engagements/northbridge-sali/private_context
 ```
 
 Copy the appropriate documents into those folders, then run:
@@ -124,7 +143,7 @@ srg show-engagement
 Activate an existing engagement:
 
 ```bash
-srg use-engagement virginia-SALI
+srg use-engagement northbridge-SALI
 ```
 
 ## Save or export a response
@@ -162,3 +181,10 @@ See [docs/technical-readme.md](docs/technical-readme.md) for:
 - Security and privacy details
 - Troubleshooting
 - Development and testing
+
+## License
+
+The original software and documentation are available under the
+[MIT License](LICENSE). Third-party publications and separately downloaded
+runtime components are governed by their own terms; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

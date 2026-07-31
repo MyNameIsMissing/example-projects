@@ -42,6 +42,20 @@ def test_shell_scripts_have_valid_bash_syntax():
     assert result.returncode == 0, result.stderr
 
 
+def test_common_script_forces_local_only_ollama_environment():
+    env = {
+        **os.environ,
+        "OLLAMA_HOST": "https://remote.example",
+        "OLLAMA_NO_CLOUD": "0",
+    }
+    command = f'source {COMMON_SCRIPT!s}; printf "%s\\n%s\\n" "$OLLAMA_HOST" "$OLLAMA_NO_CLOUD"'
+
+    result = run_bash("-c", command, env=env)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["http://127.0.0.1:11434", "1"]
+
+
 def test_model_detection_matches_exact_model_names(tmp_path):
     fake_ollama = tmp_path / "ollama"
     fake_ollama.write_text(
@@ -63,6 +77,33 @@ def test_model_detection_matches_exact_model_names(tmp_path):
     result = run_bash("-c", command, env=env)
 
     assert result.returncode == 0, result.stderr
+
+
+def test_cloud_model_detection():
+    command = (
+        f"source {COMMON_SCRIPT!s}; "
+        "srg_model_is_cloud gpt-oss:cloud; "
+        "srg_model_is_cloud gpt-oss:120b-cloud; "
+        "! srg_model_is_cloud llama3.1:8b"
+    )
+
+    result = run_bash("-c", command)
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_setup_rejects_cloud_model_before_making_changes(tmp_path):
+    env = {
+        **os.environ,
+        "HOME": str(tmp_path),
+        "SRG_GEN_MODEL": "gpt-oss:120b-cloud",
+    }
+
+    result = run_bash(str(SETUP_SCRIPT), cwd=tmp_path, env=env)
+
+    assert result.returncode == 2
+    assert "Cloud-tagged Ollama models are not supported" in result.stderr
+    assert not (tmp_path / ".local").exists()
 
 
 def test_launcher_resolves_project_when_invoked_through_symlink(tmp_path):
@@ -88,3 +129,30 @@ def test_launcher_resolves_project_when_invoked_through_symlink(tmp_path):
 
     assert result.returncode == 0, result.stderr
     assert "Local RAG CLI for drafting security control responses" in result.stdout
+
+
+def test_launcher_help_does_not_require_or_probe_ollama(tmp_path):
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    (fake_bin / "srg").symlink_to(LAUNCHER)
+    marker = tmp_path / "ollama-was-called"
+    fake_ollama = fake_bin / "ollama"
+    fake_ollama.write_text(
+        f"#!/usr/bin/env bash\ntouch {marker!s}\nexit 1\n",
+        encoding="utf-8",
+    )
+    fake_ollama.chmod(0o755)
+    env = {**os.environ, "PATH": f"{fake_bin}:{os.environ['PATH']}"}
+
+    result = subprocess.run(
+        [str(fake_bin / "srg"), "generate", "--help"],
+        cwd=tmp_path,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Generate a security control response" in result.stdout
+    assert not marker.exists()

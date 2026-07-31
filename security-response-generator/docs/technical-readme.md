@@ -18,7 +18,9 @@ target system of record accepts:
 Everything runs locally: embeddings and generation both go through
 [Ollama](https://ollama.com), and retrieval uses an embedded
 [ChromaDB](https://www.trychroma.com) instance (a folder on disk, no server
-process). Nothing is sent to a third-party.
+process). SRG pins Ollama connections to the local loopback interface,
+rejects cloud-tagged Ollama models before sending content, and disables
+Chroma product telemetry.
 
 ## Features
 
@@ -67,6 +69,9 @@ process). Nothing is sent to a third-party.
 - Permission from your customer to use this tool.  Different customers have very different AI permissions models.  
 - Python 3.11+
 - [Ollama](https://ollama.com/download) installed, with the daemon running
+- Ubuntu 22.04 is the only tested operating system. Native Windows is not
+  supported; WSL2 is supported. macOS may be compatible but has not yet been
+  tested.
 - A modest amount of VRAM or unified memory for `llama3.1:8b` (~4.9GB
   download, ~7GB of VRAM once loaded alongside `embeddinggemma`) -- fits
   comfortably on a 12GB card. See
@@ -102,15 +107,17 @@ process). Nothing is sent to a third-party.
    Other setup options include `--dev`, `--skip-models`, `--model MODEL`,
    and `--install-dir DIR`; run `./setup.sh --help` for details.
 
-2. **Manual installation (alternative)**:
-   ```bash
-   python3 -m venv .venv
-   .venv/bin/python -m pip install -e .
-   ollama pull llama3.1:8b
-   ollama pull embeddinggemma
-   ```
-
 ## Choosing a generation model
+
+> [!WARNING]
+> Model weights are not included in this source repository and are not
+> covered by its MIT License. Running `./setup.sh` without `--skip-models`
+> downloads them into Ollama's local model storage, where they become
+> separately licensed runtime components of the installed project. The
+> default generation model is governed by the
+> [Llama 3.1 Community License](https://ollama.com/library/llama3.1%3A8b-text-q3_K_M/blobs/0ba8f0e314b4);
+> the default embedding model is governed by the
+> [Gemma Terms of Use](https://ai.google.dev/gemma/terms).
 
 The default, `llama3.1:8b`, was picked after directly comparing it
 side-by-side against smaller and larger alternatives on this exact tool,
@@ -226,11 +233,11 @@ environment. This means `srg` works from any directory after setup.
      srg create-engagement <governing-state>-<system-name>
 
      # For example:
-     srg create-engagement virginia-SALI
+     srg create-engagement northbridge-SALI
      ```
      The command prints the engagement-specific folders where customer
      standards and private system context belong.
-     Use `--customer-name "Commonwealth of Virginia"` when the response label
+     Use `--customer-name "State of Northbridge"` when the response label
      should be more formal than the title-cased folder name.
 
 2. **Ingest**:
@@ -439,13 +446,17 @@ security-response-generator/
 - Customer engagement folders are gitignored, including their standards,
   private context, indexes, and generated responses. Only the explicitly
   fictional `engagements/demo/` seed files are committed.
-- All embedding and generation happens through the locally running Ollama
-  daemon by default. No document or prompt content is sent outside the
-  local machine, with one deliberate exception -- see
-  [Using a customer-approved cloud gateway](#using-a-customer-approved-cloud-gateway-eg-aws-bedrock)
-  for when a customer-approved gateway like AWS Bedrock is a reasonable fit
-  and what it would take.
-- The `srg` launcher starts Ollama with `OLLAMA_NO_CLOUD=1` which turns off telemetry.
+- The Python client is pinned to Ollama at `127.0.0.1:11434`; an
+  `OLLAMA_HOST` environment override cannot redirect SRG to a remote server.
+- SRG rejects Ollama model tags ending in `cloud` or `-cloud` before sending
+  document or prompt content.
+- Every Ollama CLI call made by the setup script or launcher is pinned to
+  loopback. Any Ollama daemon started by SRG has cloud features disabled
+  with `OLLAMA_NO_CLOUD=1`.
+- Chroma is created with `anonymized_telemetry=False`, disabling its product
+  telemetry.
+- The cloud-gateway discussion above describes a possible future feature.
+  The current implementation has no cloud generation provider.
 
 ## Manual verification
 
@@ -481,4 +492,7 @@ end-to-end behavior manually after setup:
 
 ## License
 
-MIT License — see the repository root [LICENSE](../../LICENSE) file.
+The original software and documentation are available under the
+[MIT License](../LICENSE). Third-party publications and separately
+downloaded runtime components are governed by their own terms; see
+[THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).

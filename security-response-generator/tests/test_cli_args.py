@@ -423,7 +423,7 @@ def test_demo_reminder_explains_engagement_naming(capsys):
 
     output = capsys.readouterr().err
     assert "srg create-engagement <governing-state>-<system-name>" in output
-    assert "srg create-engagement virginia-SALI" in output
+    assert "srg create-engagement northbridge-SALI" in output
     assert "srg list-engagements" in output
     assert "srg use-engagement <engagement-name>" in output
 
