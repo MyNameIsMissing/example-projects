@@ -12,24 +12,20 @@
 ## Build
 
 - Go app: `cd goapp && go build ./...`
-- Security Response Generator: `cd security-response-generator && ./setup.sh --dev`
 
 ## Test
 
 - Document Enhancer: `cd document-enhancer && npm test`
 - Go app: `cd goapp && go test ./...`
 - JavaScript app: `cd javascriptapp && npm test`
-- Security Response Generator: `cd security-response-generator && pytest`
 
 ## Lint
 
 - Document Enhancer: `cd document-enhancer && npm run lint`
 - Go app: `cd goapp && go vet ./...`
 - JavaScript app: `cd javascriptapp && npm run lint`
-- Security Response Generator: `cd security-response-generator && ruff check .`
 
 ## Format
 
 - Go app: `cd goapp && gofmt -w .`
 - JavaScript app: `cd javascriptapp && npm run format`
-- Security Response Generator: `cd security-response-generator && ruff format .`
